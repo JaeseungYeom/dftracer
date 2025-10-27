@@ -55,6 +55,18 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
 
+      - name: Free up disk space
+        run: |
+          echo "Available disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          echo "Available disk space after cleanup:"
+          df -h
+
       - name: Install system dependencies (similar to Dockerfile.dev)
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends \
@@ -109,7 +121,17 @@ jobs:
           ./autobuild.sh --enable-tests --enable-coverage
           pip install -r test/py/requirements.txt
 
+      - name: Run unit tests (non-coverage builds)
+        if: github.event_name != 'pull_request' || matrix.python_version != '3.11' || matrix.gcc_version != '11'
+        run: |
+          source ${VENV_PATH:-venv}/bin/activate
+          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
+          echo "DFTRACER_DIR=$DFTRACER_DIR"
+          cd "$DFTRACER_DIR"
+          ctest -R unit_test
+
       - name: Generate coverage data
+        if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
         run: |
           source ${VENV_PATH:-venv}/bin/activate
           DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
