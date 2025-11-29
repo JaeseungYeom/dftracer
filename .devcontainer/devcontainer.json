@@ -1,35 +1,79 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-docker-compose
 {
-	"name": "Existing Docker Compose (Extend)",
-	// Update the 'dockerComposeFile' list if you have more compose files or use different names.
-	// The .devcontainer/docker-compose.yml file contains any overrides you need/want to make.
-	"dockerComposeFile": [
-		"../compose-dev.yaml",
-		"docker-compose.yml"
+	"name": "DFTracer Development Container",
+	"dockerFile": "../infrastructure/docker/Dockerfile.dev",
+	"context": "..",
+	"build": {
+		"args": {
+			"PYTHON_VERSION": "3.10",
+			"USERNAME": "developer",
+			"USER_UID": "1000",
+			"USER_GID": "1000"
+		}
+	},
+	"runArgs": [
+		"--cap-add=SYS_PTRACE",
+		"--security-opt",
+		"seccomp=unconfined"
 	],
-	// The 'service' property is the name of the service for the container that VS Code should
-	// use. Update this value and .devcontainer/docker-compose.yml to the real service name.
-	"service": "app",
-	// The optional 'workspaceFolder' property is the path VS Code should open by default when
-	// connected. This is typically a file mount in .devcontainer/docker-compose.yml
-	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"workspaceFolder": "/workspace/dftracer",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace/dftracer,type=bind",
+	"remoteUser": "developer",
 	"features": {
-		"ghcr.io/devcontainers/features/git-lfs:1": {},
-		"ghcr.io/devcontainers/features/python:1": {}
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"installOhMyZsh": true,
+			"upgradePackages": true,
+			"username": "developer",
+			"userUid": "1000",
+			"userGid": "1000"
+		},
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/git-lfs:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"python.linting.enabled": true,
+				"python.linting.pylintEnabled": true,
+				"python.formatting.provider": "black",
+				"python.testing.pytestEnabled": true,
+				"python.testing.unittestEnabled": false,
+				"python.testing.pytestArgs": [
+					"test"
+				],
+				"files.watcherExclude": {
+					"**/build/**": true,
+					"**/dist/**": true,
+					"**/__pycache__/**": true,
+					"**/.pytest_cache/**": true
+				},
+				"C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+				"cmake.configureOnOpen": false,
+				"terminal.integrated.defaultProfile.linux": "bash"
+			},
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-vscode.cpptools",
+				"ms-vscode.cmake-tools",
+				"ms-azuretools.vscode-docker",
+				"eamodio.gitlens",
+				"github.copilot",
+				"github.vscode-pull-request-github",
+				"yzhang.markdown-all-in-one",
+				"mhutchie.git-graph",
+				"redhat.vscode-yaml",
+				"streetsidesoftware.code-spell-checker"
+			]
+		}
+	},
+	"postCreateCommand": "pip install -e .[test,dfanalyzer]",
+	"postStartCommand": "git config --global --add safe.directory /workspace/dftracer",
+	"remoteEnv": {
+		"DFTRACER_ENABLE": "0",
+		"PYTHONPATH": "/workspace/dftracer:${PYTHONPATH}"
 	}
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-	// Uncomment the next line if you want start specific services in your Docker Compose config.
-	// "runServices": [],
-	// Uncomment the next line if you want to keep your containers running after VS Code shuts down.
-	// "shutdownAction": "none",
-	// Uncomment the next line to run commands after the container is created.
-	// "postCreateCommand": "cat /etc/os-release",
-	// Configure tool-specific properties.
-	// "customizations": {},
-	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "devcontainer"
 }
