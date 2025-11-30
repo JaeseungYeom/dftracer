@@ -110,8 +110,8 @@ class DFTLogger {
       hwloc_topology_load(topology);   // actual detection
 #endif
     }
-    buffer_manager =
-        dftracer::Singleton<dftracer::BufferManager>::get_instance();
+    this->buffer_manager =
+        dftracer::Singleton<dftracer::BufferManager>::get_new_instance();
     this->is_init = true;
   }
   ~DFTLogger() {
