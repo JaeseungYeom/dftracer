@@ -5,10 +5,36 @@ This directory contains Docker configurations for building and running DFTracer 
 ## Files
 
 - **Dockerfile.dev**: Multi-platform development Dockerfile with all DFTracer dependencies
+- **Dockerfile.prod**: Production Dockerfile with DFTracer pre-installed (used for Docker Hub releases)
 - **build-multiplatform.sh**: Script for building and running Docker containers for multiple architectures
 - **README.md**: This file
 
-## Quick Start
+## Using Pre-built Images from Docker Hub
+
+The easiest way to get started is to use pre-built images from Docker Hub:
+
+```bash
+# Pull the latest release
+docker pull dftracer/dftracer:latest
+
+# Pull a specific version
+docker pull dftracer/dftracer:1.0.0
+
+# Run the image with your workspace mounted
+docker run -it --rm -v "$PWD:/workspace/myproject" dftracer/dftracer:latest
+
+# Inside the container, the virtual environment is already activated
+# DFTracer is pre-installed and ready to use
+dftracer --help
+```
+
+The pre-built images include:
+- Python 3.10 with virtual environment activated
+- DFTracer with all dependencies pre-installed
+- hwloc and MPICH for parallel computing
+- All development tools (gdb, vim, etc.)
+
+## Building from Source
 
 ### Build and Run (Easiest Way)
 
@@ -239,6 +265,45 @@ docker buildx build \
     -f infrastructure/docker/Dockerfile.dev \
     .
 ```
+
+## Publishing to Docker Hub (Maintainers Only)
+
+Docker images are automatically built and pushed to Docker Hub when a version tag is created:
+
+```bash
+# Tag a new release
+git tag v1.0.0
+git push origin v1.0.0
+
+# GitHub Actions will automatically:
+# 1. Build multi-platform images (linux/amd64, linux/arm64)
+# 2. Push to Docker Hub as dftracer/dftracer:1.0.0 and dftracer/dftracer:latest
+```
+
+### Manual Docker Hub Push
+
+To manually build and push to Docker Hub:
+
+```bash
+# Login to Docker Hub
+docker login
+
+# Build and push production image
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --build-arg DFTRACER_VERSION=1.0.0 \
+    -t dftracer/dftracer:1.0.0 \
+    -t dftracer/dftracer:latest \
+    -f infrastructure/docker/Dockerfile.prod \
+    --push \
+    .
+```
+
+### Required GitHub Secrets
+
+For automated publishing, the following secrets must be configured in the GitHub repository:
+- `DOCKER_USERNAME`: Docker Hub username
+- `DOCKER_PASSWORD`: Docker Hub password or access token
 
 ## Troubleshooting
 

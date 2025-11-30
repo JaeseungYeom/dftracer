@@ -7,12 +7,12 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-IMAGE_NAME="${IMAGE_NAME:-dftracer-dev}"
+IMAGE_NAME="${IMAGE_NAME:-dftracer/dftracer-dev}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.10}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 DOCKERFILE="${DOCKERFILE:-${SCRIPT_DIR}/Dockerfile.dev}"
-PUSH="${PUSH:-false}"
+PUSH="${PUSH:-true}"
 REGISTRY="${REGISTRY:-}"
 MODE="${MODE:-build}"
 
@@ -25,7 +25,6 @@ NC='\033[0m' # No Color
 
 # Detect host platform
 detect_platform() {
-    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
     local arch=$(uname -m)
     
     # Convert architecture names
@@ -42,7 +41,8 @@ detect_platform() {
             ;;
     esac
     
-    echo "${os}/${arch}"
+    # Docker containers always run Linux, even on macOS
+    echo "linux/${arch}"
 }
 
 # Print usage
@@ -300,6 +300,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Auto-detect platform if --load is specified without explicit --arch
+if [ "$LOAD_IMAGE" = true ] && [ "$PLATFORMS" = "linux/amd64,linux/arm64" ]; then
+    PLATFORMS=$(detect_platform)
+    echo -e "${YELLOW}Auto-detecting platform for --load: ${PLATFORMS}${NC}"
+fi
 
 # Build full image name
 if [ -n "$REGISTRY" ]; then

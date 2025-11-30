@@ -7,6 +7,7 @@ from pathlib import Path
 
 from setuptools import Extension, find_namespace_packages, find_packages, setup
 from setuptools.command.build_ext import build_ext
+from setuptools.command.install import install
 from setuptools_scm import ScmVersion
 
 # Convert distutils Windows platform specifiers to CMake -A arguments
@@ -18,10 +19,9 @@ PLAT_TO_CMAKE = {
 }
 
 
-
-
 def myversion_func(version: ScmVersion) -> str:
     from setuptools_scm.version import only_version
+
     if version.distance > 0:
         return version.format_next_version(only_version, fmt="{tag}.dev{distance}")
     else:
@@ -39,6 +39,9 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext: CMakeExtension) -> None:
+        # Check if we should only install dependencies
+        install_deps_only = os.getenv("DFTRACER_INSTALL_DEPS_ONLY", "0") == "1"
+
         is_wheel = os.getenv("DFTRACER_WHEEL", "0") == "1"
         cmake_args = []
         from distutils.sysconfig import get_python_lib
@@ -81,7 +84,9 @@ class CMakeBuild(build_ext):
 
         # Using this requires trailing slash for auto-detection & inclusion of
         # auxiliary "native" libs
-        build_type = os.environ.get("DFTRACER_BUILD_TYPE", "Release") # Setting this to release causes memory issues with GCC-13.
+        build_type = os.environ.get(
+            "DFTRACER_BUILD_TYPE", "Release"
+        )  # Setting this to release causes memory issues with GCC-13.
         cmake_args += [f"-DCMAKE_BUILD_TYPE={build_type}"]
         enable_ftracing = os.environ.get("DFTRACER_ENABLE_FTRACING", "OFF")
         cmake_args += [f"-DDFTRACER_ENABLE_FTRACING={enable_ftracing}"]
@@ -159,15 +164,22 @@ class CMakeBuild(build_ext):
                 ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
             )
         cmake_args += ["-DDFTRACER_INSTALL_DEPENDENCIES=OFF"]
+
+        # If only installing dependencies, stop here
+        if install_deps_only:
+            print("Dependencies installed successfully. Skipping DFTracer build.")
+            return
+
         # link correct depedencies
         cmake_args += [
             f"-Dyaml-cpp_DIR={install_prefix}",
             f"-Dpybind11_DIR={py_cmake_dir}",
         ]
-        
-        
+
         if "DFTRACER_CMAKE_ARGS" in os.environ:
-            cmake_args += [item for item in os.environ["DFTRACER_CMAKE_ARGS"].split(";") if item]
+            cmake_args += [
+                item for item in os.environ["DFTRACER_CMAKE_ARGS"].split(";") if item
+            ]
 
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
@@ -183,8 +195,8 @@ class CMakeBuild(build_ext):
 setup(
     name="dftracer",
     use_scm_version={"version_scheme": myversion_func},
-    packages=find_packages(where='python') + find_packages(where='dfanalyzer_old'),
-    package_dir={'': 'python', 'dfanalyzer_old': 'dfanalyzer_old'},
+    packages=find_packages(where="python") + find_packages(where="dfanalyzer_old"),
+    package_dir={"": "python", "dfanalyzer_old": "dfanalyzer_old"},
     ext_modules=[
         CMakeExtension("dftracer.dftracer"),
         CMakeExtension("dftracer.dftracer_dbg"),

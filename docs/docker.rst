@@ -10,16 +10,55 @@ Overview
 DFTracer includes a complete Docker development environment with:
 
 * Multi-platform support (amd64 and arm64)
-* Pre-installed dependencies (Python, C++, system tools)
+* Pre-installed dependencies (Python, C++, system tools, hwloc, MPICH)
+* Pre-built production images on Docker Hub
 * Automated build and run scripts
 * VS Code Dev Container integration
 * Consistent environment across all platforms
 
+Using Pre-built Docker Images
+==============================
+
+The easiest way to get started is to use pre-built images from Docker Hub:
+
+Pulling from Docker Hub
+-----------------------
+
+.. code-block:: bash
+
+   # Pull the latest release
+   docker pull dftracer/dftracer:latest
+
+   # Pull a specific version
+   docker pull dftracer/dftracer:1.0.0
+
+Running Pre-built Images
+------------------------
+
+.. code-block:: bash
+
+   # Run with your workspace mounted
+   docker run -it --rm -v "$PWD:/workspace/myproject" dftracer/dftracer:latest
+
+   # Inside the container, the virtual environment is already activated
+   # DFTracer is pre-installed and ready to use
+   dftracer --help
+
+The pre-built images include:
+
+* Python 3.10 with virtual environment activated
+* DFTracer with all dependencies pre-installed
+* hwloc and MPICH for parallel computing
+* All development tools (gdb, vim, htop, etc.)
+
+Building from Source
+=====================
+
 Quick Start
-===========
+-----------
 
 Building the Docker Image
---------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Build the Docker image for your current platform:
 
