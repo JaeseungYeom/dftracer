@@ -1,0 +1,10 @@
+# act configuration for running GitHub Actions locally
+# Use Ubuntu 22.04 image to match CI runner
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P ubuntu-latest=catthehacker/ubuntu:act-22.04
+
+# Use .secrets file for secrets (create this file with your secrets)
+--secret-file .secrets
+
+# Run as pull_request event by default
+--eventpath .github/workflows/pull_request_event.json

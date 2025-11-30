@@ -32,6 +32,7 @@ INSTALL_MODE="${INSTALL_MODE:-pip}"  # pip or cmake
 INSTALL_DFANALYZER="${INSTALL_DFANALYZER:-0}"  # Install dfanalyzer extras
 DRY_RUN="${DRY_RUN:-0}"
 VERBOSE="${VERBOSE:-0}"
+ENABLE_COVERAGE="${ENABLE_COVERAGE:-0}"  # Build with coverage support
 
 # Print usage
 usage() {
@@ -44,10 +45,11 @@ OPTIONS:
     -h, --help              Show this help message
     --build-dir DIR         Build directory (default: ./build)
     --install-prefix DIR    Install prefix (default: ./install)
-    --build-type TYPE       Build type: Release, Debug, RelWithDebInfo (default: Release)
+    --build-type TYPE       Build type: Release, Debug, RelWithDebInfo, PROFILE (default: Release)
     --python PATH           Python executable path (enables Python support, default: none)
     --skip-deps             Skip building dependencies
     --enable-tests          Enable tests
+    --enable-coverage       Enable coverage analysis (sets build type to PROFILE and enables tests)
     --enable-ftracing       Enable function tracing
     --enable-hip            Enable HIP tracing
     --enable-mpi            Enable MPI support
@@ -83,6 +85,9 @@ EXAMPLES:
     # Build with tests enabled
     $0 --enable-tests
 
+    # Build with coverage analysis support
+    $0 --enable-coverage
+
     # Clean build with custom install prefix
     $0 --clean --install-prefix /usr/local
 
@@ -106,6 +111,19 @@ EXAMPLES:
 
     # Verbose output for debugging
     $0 --verbose --enable-tests
+
+COVERAGE ANALYSIS WORKFLOW:
+    # 1. Build with coverage support
+    $0 --enable-coverage
+
+    # 2. Run tests and generate coverage report
+    ./script/coverage_after_autobuild.sh
+
+    # 3. Generate detailed report for analysis
+    ./script/generate_coverage_report.sh > coverage_report.txt
+
+    # 4. View HTML report
+    open build/coverage/html/index.html
 
 EOF
 }
@@ -143,6 +161,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --enable-tests)
             ENABLE_TESTS="ON"
+            export DFTRACER_ENABLE_TESTS="ON"
+            shift
+            ;;
+        --enable-coverage)
+            ENABLE_COVERAGE="1"
+            BUILD_TYPE="PROFILE"
+            ENABLE_TESTS="ON"
+            export DFTRACER_BUILD_TYPE="PROFILE"
             export DFTRACER_ENABLE_TESTS="ON"
             shift
             ;;
@@ -278,6 +304,29 @@ if [ "$CLEAN_INSTALL" = "1" ]; then
     echo -e "${GREEN}=== Cleaning DFTracer Installation ===${NC}"
     echo ""
     
+    # First, uninstall via pip if Python is available
+    if [ "$USE_PYTHON" = "yes" ] || command -v python3 &> /dev/null; then
+        PYTHON_FOR_CLEAN="${PYTHON_EXE:-python3}"
+        
+        if command -v "${PYTHON_FOR_CLEAN}" &> /dev/null; then
+            echo "Checking for pip-installed DFTracer..."
+            
+            # Check if dftracer or pydftracer is installed
+            if "${PYTHON_FOR_CLEAN}" -m pip show dftracer &> /dev/null || "${PYTHON_FOR_CLEAN}" -m pip show pydftracer &> /dev/null; then
+                if [ "$DRY_RUN" = "1" ]; then
+                    echo -e "${YELLOW}[DRY-RUN] Would uninstall dftracer/pydftracer via pip${NC}"
+                else
+                    echo "Uninstalling dftracer and pydftracer via pip..."
+                    "${PYTHON_FOR_CLEAN}" -m pip uninstall -y dftracer pydftracer 2>/dev/null || true
+                    echo -e "${GREEN}Pip packages uninstalled${NC}"
+                fi
+            else
+                echo "No pip-installed dftracer found"
+            fi
+            echo ""
+        fi
+    fi
+    
     # Determine what to clean
     CLEAN_LOCATIONS=()
     
@@ -296,6 +345,22 @@ if [ "$CLEAN_INSTALL" = "1" ]; then
                 if [ -d "${SITE_PACKAGES}/pydftracer.egg-info" ]; then
                     CLEAN_LOCATIONS+=("${SITE_PACKAGES}/pydftracer.egg-info")
                 fi
+                if [ -d "${SITE_PACKAGES}/dftracer.egg-info" ]; then
+                    CLEAN_LOCATIONS+=("${SITE_PACKAGES}/dftracer.egg-info")
+                fi
+                # Check for egg-link files (editable installs)
+                if [ -f "${SITE_PACKAGES}/dftracer.egg-link" ]; then
+                    CLEAN_LOCATIONS+=("${SITE_PACKAGES}/dftracer.egg-link")
+                fi
+                if [ -f "${SITE_PACKAGES}/pydftracer.egg-link" ]; then
+                    CLEAN_LOCATIONS+=("${SITE_PACKAGES}/pydftracer.egg-link")
+                fi
+                # Check for .pth files
+                for pth_file in "${SITE_PACKAGES}"/__editable__.dftracer*.pth "${SITE_PACKAGES}"/__editable__.pydftracer*.pth; do
+                    if [ -f "$pth_file" ]; then
+                        CLEAN_LOCATIONS+=("$pth_file")
+                    fi
+                done
                 # Check for .so files
                 for so_file in "${SITE_PACKAGES}"/dftracer*.so; do
                     if [ -f "$so_file" ]; then
@@ -499,7 +564,11 @@ if [ "$INSTALL_MODE" = "pip" ]; then
     echo -e "${GREEN}Step 0: Installing Python build dependencies${NC}"
     echo ""
     
-    BUILD_DEPS_CMD=("${PYTHON_EXE}" -m pip install --no-cache-dir setuptools wheel setuptools-scm pybind11 scikit-build-core cmake ninja)
+    # Upgrade pip first to ensure we have the latest version
+    "${PYTHON_EXE}" -m pip install --upgrade pip
+    
+    # Install build dependencies with normal isolation (not using --no-build-isolation here)
+    BUILD_DEPS_CMD=("${PYTHON_EXE}" -m pip install --upgrade setuptools wheel setuptools-scm pybind11 scikit-build-core cmake ninja)
     
     if [ "$VERBOSE" = "1" ]; then
         echo -e "${BLUE}[VERBOSE] Build dependencies command: ${BUILD_DEPS_CMD[*]}${NC}"
@@ -513,6 +582,15 @@ if [ "$INSTALL_MODE" = "pip" ]; then
             exit 1
         fi
         echo -e "${GREEN}Python build dependencies installed successfully${NC}"
+        # Install gcovr if coverage is enabled
+        if [ "$ENABLE_COVERAGE" = "1" ]; then
+            echo -e "${GREEN}Installing gcovr for coverage analysis...${NC}"
+            if ! "${PYTHON_EXE}" -m pip install gcovr; then
+                echo -e "${YELLOW}Warning: Failed to install gcovr. Coverage analysis may not work.${NC}"
+            else
+                echo -e "${GREEN}gcovr installed successfully${NC}"
+            fi
+        fi
     fi
     echo ""
     
@@ -531,7 +609,7 @@ if [ "$INSTALL_MODE" = "pip" ]; then
         fi
         
         # Do a full build which includes dependencies
-        FULL_BUILD_CMD=("${PYTHON_EXE}" -m pip install --no-cache-dir -e ".[${PIP_EXTRAS}]")
+        FULL_BUILD_CMD=("${PYTHON_EXE}" -m pip install --no-cache-dir ".[${PIP_EXTRAS}]")
         
         if [ "$VERBOSE" = "1" ]; then
             FULL_BUILD_CMD+=(-v)
@@ -556,6 +634,8 @@ if [ "$INSTALL_MODE" = "pip" ]; then
         # Set environment to skip dependency build
         export DFTRACER_BUILD_DEPENDENCIES="0"
         
+        # Set environment variables to avoid file locking issues
+        
         # Build pip extras based on flags
         PIP_EXTRAS="test"
         if [ "$INSTALL_DFANALYZER" = "1" ]; then
@@ -563,7 +643,7 @@ if [ "$INSTALL_MODE" = "pip" ]; then
         fi
         
         # Build and install with pip (will use the virtual environment)
-        PIP_CMD=("${PYTHON_EXE}" -m pip install --no-cache-dir -e ".[${PIP_EXTRAS}]")
+        PIP_CMD=("${PYTHON_EXE}" -m pip install --no-cache-dir ".[${PIP_EXTRAS}]")
         
         if [ "$VERBOSE" = "1" ]; then
             PIP_CMD+=(-v)
@@ -577,6 +657,24 @@ if [ "$INSTALL_MODE" = "pip" ]; then
                 exit 1
             fi
             echo -e "${GREEN}DFTracer built successfully${NC}"
+            # Install Python test requirements if tests are enabled
+            if [ "$ENABLE_TESTS" = "ON" ] && [ -f "${SCRIPT_DIR}/test/py/requirements.txt" ]; then
+                echo "Installing Python test requirements..."
+                if [ "$DRY_RUN" = "1" ]; then
+                    echo -e "${YELLOW}[DRY-RUN] Would execute: ${PYTHON_EXE} -m pip install -r ${SCRIPT_DIR}/test/py/requirements.txt${NC}"
+                else
+                    if [ "$VERBOSE" = "1" ]; then
+                        echo -e "${BLUE}[VERBOSE] Installing from: ${SCRIPT_DIR}/test/py/requirements.txt${NC}"
+                    fi
+                    if "${PYTHON_EXE}" -m pip install -r "${SCRIPT_DIR}/test/py/requirements.txt"; then
+                        echo -e "${GREEN}✓ Python test requirements installed${NC}"
+                    else
+                        echo -e "${YELLOW}Warning: Failed to install Python test requirements${NC}"
+                        echo "Some tests may fail. Install manually with:"
+                        echo "  ${PYTHON_EXE} -m pip install -r test/py/requirements.txt"
+                    fi
+                fi
+            fi
         fi
         echo ""
     fi
@@ -586,7 +684,7 @@ if [ "$INSTALL_MODE" = "pip" ]; then
         echo ""
         echo -e "${GREEN}=== Build and Installation Successful ===${NC}"
         echo ""
-        echo "DFTracer has been installed in editable mode."
+        echo "DFTracer has been installed in your virtual environment."
         echo ""
         
         # Determine where to put the environment script
@@ -789,8 +887,88 @@ else
             echo -e "${RED}Failed to build DFTracer${NC}"
             exit 1
         fi
+        # Install Python test requirements if tests are enabled
+        if [ "$ENABLE_TESTS" = "ON" ] && [ "$USE_PYTHON" = "yes" ] && [ -f "${SCRIPT_DIR}/test/py/requirements.txt" ]; then
+            echo "Installing Python test requirements..."
+            if [ "$DRY_RUN" = "1" ]; then
+                echo -e "${YELLOW}[DRY-RUN] Would execute: ${PYTHON_EXE} -m pip install -r ${SCRIPT_DIR}/test/py/requirements.txt${NC}"
+            else
+                if [ "$VERBOSE" = "1" ]; then
+                    echo -e "${BLUE}[VERBOSE] Installing from: ${SCRIPT_DIR}/test/py/requirements.txt${NC}"
+                fi
+                if "${PYTHON_EXE}" -m pip install -r "${SCRIPT_DIR}/test/py/requirements.txt"; then
+                    echo -e "${GREEN}✓ Python test requirements installed${NC}"
+                else
+                    echo -e "${YELLOW}Warning: Failed to install Python test requirements${NC}"
+                    echo "Some tests may fail. Install manually with:"
+                    echo "  ${PYTHON_EXE} -m pip install -r test/py/requirements.txt"
+                fi
+            fi
+        fi
     fi
     echo ""
+    
+    # Step 3.5: Install test dependencies if tests are enabled
+    if [ "$ENABLE_TESTS" = "ON" ]; then
+        echo -e "${BLUE}Step 3.5: Installing test dependencies...${NC}"
+        
+        # Check for jq (needed for coverage and test analysis)
+        if ! command -v jq &> /dev/null; then
+            echo -e "${YELLOW}Warning: jq not found. Attempting to install...${NC}"
+            
+            if [ "$DRY_RUN" = "1" ]; then
+                echo -e "${YELLOW}[DRY-RUN] Would install jq${NC}"
+            else
+                # Try to detect package manager and install jq
+                if command -v apt-get &> /dev/null; then
+                    echo "Detected apt-get, installing jq..."
+                    sudo apt-get update && sudo apt-get install -y jq || echo -e "${YELLOW}Could not install jq with apt-get${NC}"
+                elif command -v yum &> /dev/null; then
+                    echo "Detected yum, installing jq..."
+                    sudo yum install -y jq || echo -e "${YELLOW}Could not install jq with yum${NC}"
+                elif command -v brew &> /dev/null; then
+                    echo "Detected brew, installing jq..."
+                    brew install jq || echo -e "${YELLOW}Could not install jq with brew${NC}"
+                else
+                    echo -e "${YELLOW}Could not detect package manager. Please install jq manually:${NC}"
+                    echo "  - Ubuntu/Debian: sudo apt-get install jq"
+                    echo "  - RHEL/CentOS: sudo yum install jq"
+                    echo "  - macOS: brew install jq"
+                fi
+            fi
+        else
+            echo -e "${GREEN}✓ jq is already installed${NC}"
+        fi
+        
+        # Install Python test requirements if Python is enabled
+        if [ "$USE_PYTHON" = "yes" ] && [ -f "${SCRIPT_DIR}/test/py/requirements.txt" ]; then
+            echo "Installing Python test requirements..."
+            
+            if [ "$DRY_RUN" = "1" ]; then
+                echo -e "${YELLOW}[DRY-RUN] Would execute: ${PYTHON_EXE} -m pip install -r test/py/requirements.txt${NC}"
+            else
+                if [ "$VERBOSE" = "1" ]; then
+                    echo -e "${BLUE}[VERBOSE] Installing from: ${SCRIPT_DIR}/test/py/requirements.txt${NC}"
+                fi
+                
+                if "${PYTHON_EXE}" -m pip install -r "${SCRIPT_DIR}/test/py/requirements.txt"; then
+                    echo -e "${GREEN}✓ Python test requirements installed${NC}"
+                else
+                    echo -e "${YELLOW}Warning: Failed to install Python test requirements${NC}"
+                    echo "Some tests may fail. Install manually with:"
+                    echo "  ${PYTHON_EXE} -m pip install -r test/py/requirements.txt"
+                fi
+            fi
+        else
+            if [ "$USE_PYTHON" != "yes" ]; then
+                echo "Skipping Python test requirements (Python not enabled)"
+            elif [ ! -f "${SCRIPT_DIR}/test/py/requirements.txt" ]; then
+                echo -e "${YELLOW}Note: test/py/requirements.txt not found${NC}"
+            fi
+        fi
+        
+        echo ""
+    fi
     
     # Step 4: Install DFTracer
     echo -e "${BLUE}Step 4: Installing DFTracer...${NC}"
@@ -842,6 +1020,22 @@ EOF
             if [ "$ENABLE_TESTS" = "ON" ]; then
                 echo "To run tests:"
                 echo "  cd ${BUILD_DIR} && ctest"
+                echo ""
+            fi
+            if [ "$ENABLE_COVERAGE" = "1" ] || [ "$BUILD_TYPE" = "PROFILE" ]; then
+                echo -e "${BLUE}=== Coverage Analysis ===${NC}"
+                echo ""
+                echo "Build is configured for coverage analysis."
+                echo ""
+                echo "To generate coverage report:"
+                echo "  ./script/coverage_after_autobuild.sh"
+                echo ""
+                echo "To generate detailed analysis for test improvement:"
+                echo "  ./script/generate_coverage_report.sh > coverage_report.txt"
+                echo ""
+                echo "View HTML report:"
+                echo "  open ${BUILD_DIR}/coverage/html/index.html"
+                echo ""
             fi
             echo ""
         else

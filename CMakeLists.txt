@@ -1,20 +1,39 @@
-cmake_minimum_required(VERSION 3.5...3.18)
+cmake_minimum_required(VERSION 3.20)
 
 # ------------------------------------------------------------------------------
-# Version information
+# Version information - Read from VERSION and PACKAGE_VERSION files
 # ------------------------------------------------------------------------------
-set(DFTRACER_VERSION_MAJOR "4")
-set(DFTRACER_VERSION_MINOR "0")
-set(DFTRACER_VERSION_PATCH "0")
+# Read library version from VERSION file (e.g., 4.0.0)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" DFTRACER_LIBRARY_VERSION_STRING)
+string(STRIP "${DFTRACER_LIBRARY_VERSION_STRING}" DFTRACER_LIBRARY_VERSION_STRING)
+
+# Parse library version components
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" _ ${DFTRACER_LIBRARY_VERSION_STRING})
+set(DFTRACER_VERSION_MAJOR "${CMAKE_MATCH_1}")
+set(DFTRACER_VERSION_MINOR "${CMAKE_MATCH_2}")
+set(DFTRACER_VERSION_PATCH "${CMAKE_MATCH_3}")
+set(DFTRACER_LIBRARY_VERSION "${DFTRACER_VERSION_MAJOR}.${DFTRACER_VERSION_MINOR}.${DFTRACER_VERSION_PATCH}")
+
+# Read Python package version from PACKAGE_VERSION file (e.g., 2.0.2)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/PACKAGE_VERSION" DFTRACER_PACKAGE_VERSION_STRING)
+string(STRIP "${DFTRACER_PACKAGE_VERSION_STRING}" DFTRACER_PACKAGE_VERSION_STRING)
+
+# Parse package version components
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" _ ${DFTRACER_PACKAGE_VERSION_STRING})
+set(DFTRACER_PACKAGE_VERSION_MAJOR "${CMAKE_MATCH_1}")
+set(DFTRACER_PACKAGE_VERSION_MINOR "${CMAKE_MATCH_2}")
+set(DFTRACER_PACKAGE_VERSION_PATCH "${CMAKE_MATCH_3}")
+
+# Set package version as tuple string (used by setuptools-scm and Python bindings)
+set(DFTRACER_PACKAGE_VERSION "(${DFTRACER_PACKAGE_VERSION_MAJOR}, ${DFTRACER_PACKAGE_VERSION_MINOR}, ${DFTRACER_PACKAGE_VERSION_PATCH})")
+
+# Set legacy package variables (for backward compatibility)
 set(DFTRACER_PACKAGE ${PROJECT_NAME})
 set(DFTRACER_PACKAGE_NAME ${PROJECT_NAME})
-set(DFTRACER_PACKAGE_VERSION "${DFTRACER_VERSION_MAJOR}.${DFTRACER_VERSION_MINOR}.${DFTRACER_VERSION_PATCH}")
-set(DFTRACER_PACKAGE_VERSION_MAJOR "${DFTRACER_VERSION_MAJOR}.${DFTRACER_VERSION_MINOR}")
-set(DFTRACER_PACKAGE_VERSION_MINOR "${DFTRACER_VERSION_PATCH}")
-set(DFTRACER_PACKAGE_STRING "${DFTRACER_PACKAGE_NAME} ${DFTRACER_PACKAGE_VERSION}")
+set(DFTRACER_PACKAGE_VERSION_FULL "${DFTRACER_PACKAGE_VERSION_MAJOR}.${DFTRACER_PACKAGE_VERSION_MINOR}.${DFTRACER_PACKAGE_VERSION_PATCH}")
+set(DFTRACER_PACKAGE_VERSION_SHORT "${DFTRACER_PACKAGE_VERSION_MAJOR}.${DFTRACER_PACKAGE_VERSION_MINOR}")
+set(DFTRACER_PACKAGE_STRING "${DFTRACER_PACKAGE_NAME} ${DFTRACER_PACKAGE_VERSION_FULL}")
 set(DFTRACER_PACKAGE_TARNAME "${DFTRACER_PACKAGE}")
-
-set(DFTRACER_VERSION "(2, 0, 2)")
 
 project(dftracer LANGUAGES C CXX)
 
@@ -40,6 +59,8 @@ if(CMAKE_INSTALL_LIBDIR)
         set(DFTRACER_LIBDIR ${CMAKE_INSTALL_LIBDIR})
         set(DFTRACER_INSTALL_INCLUDE_DIR
                 ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
+        set(DFTRACER_INSTALL_LIB_DIR
+                ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
         set(DFTRACER_INSTALL_DOCDIR
                 ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR})
         set(DFTRACER_INSTALL_SYSCONFDIR
@@ -49,6 +70,7 @@ if(CMAKE_INSTALL_LIBDIR)
 else()
         set(DFTRACER_LIBDIR "lib")
         set(DFTRACER_INSTALL_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
+        set(DFTRACER_INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
         set(DFTRACER_INSTALL_DOCDIR "${CMAKE_INSTALL_PREFIX}/doc")
         set(DFTRACER_INSTALL_SYSCONFDIR "${CMAKE_INSTALL_PREFIX}/etc/modulefiles")
         set(DFTRACER_INSTALL_BINARYDIR "${CMAKE_INSTALL_PREFIX}/bin")
@@ -408,7 +430,9 @@ else()
         set(DFTRACER_CORE_PUBLIC_INCLUDE
                 ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/dftracer.h
                 ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/core/common/constants.h
-                ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/core/common/typedef.h)
+                ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/core/common/typedef.h
+                ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/core/common/cpp_typedefs.h
+                ${CMAKE_CURRENT_SOURCE_DIR}/include/dftracer/core/common/enumeration.h)
         set(DFTRACER_CORE_PRIVATE_INCLUDE
                 ${CMAKE_CURRENT_SOURCE_DIR}/src/dftracer/core/utils/posix_internal.h
                 ${CMAKE_CURRENT_SOURCE_DIR}/src/dftracer/core/utils/utils.h
@@ -425,13 +449,17 @@ else()
                 ${CMAKE_CURRENT_SOURCE_DIR}/src/dftracer/core/aggregator/aggregator.h
                 ${CMAKE_CURRENT_SOURCE_DIR}/src/dftracer/core/common/datastructure.h)
         add_library(${PROJECT_NAME}_core SHARED)
+        add_library(dftracer::dftracer_core ALIAS ${PROJECT_NAME}_core)
         target_compile_definitions(${PROJECT_NAME}_core PUBLIC DFTRACER_LOGGER_LEVEL_ERROR)
         target_link_libraries(${PROJECT_NAME}_core ${DEPENDENCY_LIB})
         add_library(${PROJECT_NAME}_core_dbg SHARED)
+        add_library(dftracer::dftracer_core_dbg ALIAS ${PROJECT_NAME}_core_dbg)
         target_link_libraries(${PROJECT_NAME}_core_dbg ${DEPENDENCY_LIB})
         add_library(${PROJECT_NAME}_preload SHARED)
+        add_library(dftracer::dftracer_preload ALIAS ${PROJECT_NAME}_preload)
         target_link_libraries(${PROJECT_NAME}_preload ${DEPENDENCY_LIB} ${PROJECT_NAME}_core)
         add_library(${PROJECT_NAME}_preload_dbg SHARED)
+        add_library(dftracer::dftracer_preload_dbg ALIAS ${PROJECT_NAME}_preload_dbg)
         target_link_libraries(${PROJECT_NAME}_preload_dbg ${DEPENDENCY_LIB} ${PROJECT_NAME}_core_dbg)
 
         set(DFTRACER_DEBUG_TARGETS ${PROJECT_NAME}_core_dbg ${PROJECT_NAME}_preload_dbg)
@@ -439,6 +467,7 @@ else()
         set(DFTRACER_SERVICE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/dftracer/service/service.cpp)
 
         add_executable(${PROJECT_NAME}_service ${DFTRACER_SERVICE_SRC})
+        add_executable(dftracer::dftracer_service ALIAS ${PROJECT_NAME}_service)
         target_compile_definitions(${PROJECT_NAME}_service PUBLIC DFTRACER_LOGGER_LEVEL_ERROR)
         target_link_libraries(${PROJECT_NAME}_service ${DEPENDENCY_LIB} ${PROJECT_NAME}_core)
 
@@ -505,8 +534,8 @@ else()
                 RELEASE_OUTPUT_NAME ${PROJECT_NAME}_core
                 MINSIZEREL_OUTPUT_NAME ${PROJECT_NAME}_core
                 RELWITHDEBINFO_OUTPUT_NAME ${PROJECT_NAME}_core
-                VERSION ${DFTRACER_PACKAGE_VERSION}
-                SOVERSION ${DFTRACER_PACKAGE_VERSION}
+                VERSION ${DFTRACER_LIBRARY_VERSION}
+                SOVERSION ${DFTRACER_LIBRARY_VERSION}
         )
 
         dftracer_debug_config("${DFTRACER_DEBUG_TARGETS}")
@@ -686,6 +715,15 @@ else()
                         message("-- " "[DFTracer] building with CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE}")
                         set(CMAKE_C_FLAGS_PROFILE --coverage)
                         set(CMAKE_CXX_FLAGS_PROFILE --coverage)
+
+                        # Find gcovr for coverage reporting
+                        find_program(GCOVR_EXECUTABLE gcovr)
+
+                        if(GCOVR_EXECUTABLE)
+                                message(STATUS "Found gcovr: ${GCOVR_EXECUTABLE}")
+                        else()
+                                message(WARNING "gcovr not found. Coverage reports will not be available.")
+                        endif()
                 endif()
 
                 enable_testing()
@@ -695,47 +733,109 @@ else()
                         get_property(COVERAGE_FILE_LIST GLOBAL PROPERTY COVERAGE_FILES)
                         add_custom_command(OUTPUT default.profdata COMMAND llvm-profdata merge -sparse ${COVERAGE_FILE_LIST} -o default.profdata VERBATIM)
                         add_custom_target(merged_coverage DEPENDS default.profdata)
+
+                        # Add coverage target for easy local C/C++ coverage generation
+                        if(GCOVR_EXECUTABLE)
+                                add_custom_target(coverage
+                                        COMMAND ${CMAKE_COMMAND} -E echo "Generating C/C++ coverage reports..."
+                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
+                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage/html
+
+                                        # Generate HTML report with details
+                                        COMMAND ${GCOVR_EXECUTABLE}
+                                        -r ${CMAKE_SOURCE_DIR}
+                                        ${CMAKE_BINARY_DIR}
+                                        --html-details ${CMAKE_BINARY_DIR}/coverage/html/index.html
+                                        -e ${CMAKE_SOURCE_DIR}/test/
+                                        -e ${CMAKE_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        --exclude-unreachable-branches
+                                        --exclude-throw-branches
+
+                                        # Generate XML for CI
+                                        COMMAND ${GCOVR_EXECUTABLE}
+                                        -r ${CMAKE_SOURCE_DIR}
+                                        ${CMAKE_BINARY_DIR}
+                                        --xml ${CMAKE_BINARY_DIR}/coverage/coverage.xml
+                                        -e ${CMAKE_SOURCE_DIR}/test/
+                                        -e ${CMAKE_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        --exclude-unreachable-branches
+                                        --exclude-throw-branches
+
+                                        # Generate Coveralls JSON for CI
+                                        COMMAND ${GCOVR_EXECUTABLE}
+                                        -r ${CMAKE_SOURCE_DIR}
+                                        ${CMAKE_BINARY_DIR}
+                                        --coveralls ${CMAKE_BINARY_DIR}/coverage/coveralls.json
+                                        -e ${CMAKE_SOURCE_DIR}/test/
+                                        -e ${CMAKE_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        --exclude-unreachable-branches
+                                        --exclude-throw-branches
+
+                                        # Print summary
+                                        COMMAND ${GCOVR_EXECUTABLE}
+                                        -r ${CMAKE_SOURCE_DIR}
+                                        ${CMAKE_BINARY_DIR}
+                                        -e ${CMAKE_SOURCE_DIR}/test/
+                                        -e ${CMAKE_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        --exclude-unreachable-branches
+                                        --exclude-throw-branches
+                                        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                                        COMMENT "Generating coverage reports in ${CMAKE_BINARY_DIR}/coverage/"
+                                        VERBATIM
+                                )
+
+                                message(STATUS "Coverage target added. Run 'make coverage' after running tests.")
+                        endif()
                 endif()
         endif()
 
         # -----------------------------------------------------------------------------
-        # Configure the config.cmake file for the build directory
+        # Configure the unified config.cmake file for both build and install trees
         # -----------------------------------------------------------------------------
         include(CMakePackageConfigHelpers)
+
+        # Single unified config file that auto-detects build vs install tree
+        # Generate directly in build tree location: lib/cmake/dftracer/
         configure_package_config_file(
-                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.build.in
-                "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
-                INSTALL_DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake
-                PATH_VARS CMAKE_BINARY_DIR
+                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.in
+                "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake"
+                INSTALL_DESTINATION ${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}
+                PATH_VARS
+                DFTRACER_INSTALL_INCLUDE_DIR
+                DFTRACER_INSTALL_LIB_DIR
+                DFTRACER_LIBDIR
         )
 
-        configure_package_config_file(
-                ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.install.in
-                "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
-                INSTALL_DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/install/${PROJECT_NAME}-config.cmake
-                PATH_VARS CMAKE_BINARY_DIR
-        )
+        # Install the config file to install tree: lib/cmake/dftracer/
         install(
-                FILES
-                ${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake
-                DESTINATION
-                ${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}
+                FILES "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake"
+                DESTINATION ${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}
         )
+
+        # Copy dftracer-utils.cmake and dftracer-config-version.cmake to build and install locations
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/dftracer-utils.cmake"
+                DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/dftracer")
+
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/dftracer-utils.cmake"
+                DESTINATION "${DFTRACER_LIBDIR}/cmake/dftracer")
+        install(FILES "${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake"
                 DESTINATION "${DFTRACER_LIBDIR}/cmake/dftracer")
 
         # -----------------------------------------------------------------------------
         # Configure the ${PROJECT_NAME}-config-version .cmake file for the install directory
         # -----------------------------------------------------------------------------
-        install(
-                FILES
-                ${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake
-                DESTINATION
-                ${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}
-        )
 
+        # Always export targets as dftracer-targets.cmake for downstream find_package
         export(EXPORT ${DFTRACER_EXPORTED_TARGETS}
-                FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}Targets.cmake")
+                FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/dftracer-targets.cmake")
 
         # Write the configure file
         configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_config.hpp.in"
@@ -751,9 +851,10 @@ else()
 
         # Write the version file. This is independent of build/install tree.
         write_basic_package_version_file(
-                dftracer-config-version.cmake
-                VERSION "${DFTRACER_PACKAGE_VERSION}"
-                COMPATIBILITY SameMajorVersion)
+                ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake
+                VERSION "${DFTRACER_LIBRARY_VERSION}"
+                COMPATIBILITY SameMajorVersion
+        )
 
         install(FILES
                 "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/dftracer/core/dftracer_config.hpp"
@@ -770,7 +871,7 @@ else()
                 DESTINATION
                 ${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}
                 FILE
-                ${DFTRACER_EXPORTED_TARGETS}.cmake
+                dftracer-targets.cmake
         )
 
         # Install license and readme
@@ -821,7 +922,9 @@ else()
         string(APPEND _str "\n")
 
         string(APPEND _str
-                "  DFTRACER_PACKAGE_VERSION:        ${DFTRACER_PACKAGE_VERSION}\n")
+                "  DFTRACER_LIBRARY_VERSION:        ${DFTRACER_LIBRARY_VERSION}\n")
+        string(APPEND _str
+                "  DFTRACER_PACKAGE_VERSION:        ${DFTRACER_PACKAGE_VERSION_FULL}\n")
         string(APPEND _str
                 "  DFTRACER_GIT_VERSION:            ${DFTRACER_GIT_VERSION}\n")
         string(APPEND _str
@@ -864,7 +967,7 @@ else()
         # ##############################################################################
         # Write a basic modulefile
         # ##############################################################################
-        set(DFTRACER_MODULEFILE_NAME "dftracer-${DFTRACER_PACKAGE_VERSION}.lua")
+        set(DFTRACER_MODULEFILE_NAME "dftracer-${DFTRACER_LIBRARY_VERSION}.lua")
 
         # CACHE STRING
         # "The name of the DFTRACER modulefile to install. Must end in .lua.")

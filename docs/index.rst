@@ -68,6 +68,7 @@ DFTracer: is a library for profiling I/O calls and application functions.
    developer-guide
    style-guides
    testing
+   coverage
 
 .. toctree::
    :maxdepth: 1

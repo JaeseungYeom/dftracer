@@ -1,0 +1,12 @@
+{
+    "pull_request": {
+        "number": 334,
+        "head": {
+            "ref": "feature/docker",
+            "sha": "local-test"
+        },
+        "base": {
+            "ref": "develop"
+        }
+    }
+}
