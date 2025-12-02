@@ -29,7 +29,6 @@ void finalize();
  * CPP Only
  */
 #include <dftracer/core/common/cpp_typedefs.h>
-#include <dftracer/core/common/datastructure.h>
 
 // External Headers
 

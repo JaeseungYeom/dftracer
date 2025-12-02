@@ -135,9 +135,9 @@ void update_metadata_int_type(struct DFTracerData *data, const char *key,
     profiler->update(key, value, meta_type);
   }
 }
-void update_metadata_string(struct DFTracerData *data, const char *key,
-                            const char *value, int type) {
-  DFTRACER_LOG_DEBUG("dftracer.update_metadata_string", "");
+void update_metadata_string_type(struct DFTracerData *data, const char *key,
+                                 const char *value, int type) {
+  DFTRACER_LOG_DEBUG("dftracer.update_metadata_string_type", "");
   if (data && data->profiler) {
     auto profiler = (DFTracer *)data->profiler;
     MetadataType meta_type;

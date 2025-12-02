@@ -4,81 +4,220 @@ on:
   pull_request:
     branches: [main, develop]
   push:
+
 jobs:
   build-and-test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
-        dir: ["clone"]
-        perm: ["user", "venv"]
-        exclude:
-          - dir: "clone"
-            perm: "user"
-    name: ${{ matrix.os }}-${{ matrix.dir }}-${{ matrix.perm }}
-    runs-on: ${{ matrix.os }}
+        include:
+          # Test one GCC version with multiple Python versions
+          - python_version: "3.9"
+            gcc_version: "11"
+            compiler: "gcc"
+          - python_version: "3.10"
+            gcc_version: "11"
+            compiler: "gcc"
+          - python_version: "3.11"
+            gcc_version: "11"
+            compiler: "gcc"
+          - python_version: "3.12"
+            gcc_version: "11"
+            compiler: "gcc"
+          # Test one Python version with multiple GCC versions
+          - python_version: "3.11"
+            gcc_version: "9"
+            compiler: "gcc"
+          - python_version: "3.11"
+            gcc_version: "10"
+            compiler: "gcc"
+          - python_version: "3.11"
+            gcc_version: "12"
+            compiler: "gcc"
+          - python_version: "3.11"
+            gcc_version: "13"
+            compiler: "gcc"
+
+    name: Python-${{ matrix.python_version }}-GCC-${{ matrix.gcc_version }}
+    runs-on: ubuntu-22.04
+
     env:
-      DIR: ${{ matrix.dir }}
-      PERM: ${{ matrix.perm }}
-      OS: ${{ matrix.os }}
+      CC: gcc-${{ matrix.gcc_version }}
+      CXX: g++-${{ matrix.gcc_version }}
+      INSTALL_MODE: pip
 
     steps:
-      - name: Push checkout
-        if: github.event_name == 'push'
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: PR checkout
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install additional packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install ${CC} ${CXX} libtool-bin openmpi-bin libopenmpi-dev
-          sudo apt-get install python3 python3-pip python3-dev
-          sudo apt-get install gcovr clang-format
 
-          if [[ $PERM == 'venv' ]]; then
-            python -m venv ../venv
-            source ../venv/bin/activate
-          fi
-      - name: Build from ${{ matrix.dir }} on ${{ matrix.perm }}
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install system dependencies (similar to Dockerfile.dev)
         run: |
-          export CMAKE_BUILD_TYPE=PROFILE
-          if [ $OS == 'ubuntu-22.04' ] && [ $DIR == 'clone' ] && [ $PERM == 'venv' ]; then
-            export DFTRACER_ENABLE_TESTS=On
-          fi
-          echo Install variables DFTRACER_ENABLE_TESTS $DFTRACER_ENABLE_TESTS
-          LOC=.[analyzer]
-          if [[ $PERM == 'user' ]]; then
-            export DFTRACER_LOGGER_USER=1
-            echo pip install --user ${LOC}
-            pip install -v ${LOC}
-          elif [[ $PERM == 'venv' ]]; then
-            source ../venv/bin/activate
-            pip install --upgrade pip
-            echo pip install ${LOC}
-            pip install ${LOC}
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            wget \
+            curl \
+            ca-certificates \
+            pkg-config \
+            libyaml-cpp-dev \
+            hwloc \
+            libhwloc-dev \
+            mpich \
+            libmpich-dev \
+            python3-dev \
+            python3-venv \
+            software-properties-common \
+            jq \
+            gcovr
+
+          # Add Ubuntu toolchain PPA and install specific GCC version
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
+
+          # Set as default
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ matrix.gcc_version }} 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-${{ matrix.gcc_version }} 100
+
+      - name: Create Python virtual environment
+        run: |
+          # For act (local testing), create venv in /tmp to avoid bind mount issues
+          if [ -n "$ACT" ]; then
+            VENV_DIR=/tmp/venv
+            python -m venv $VENV_DIR
+            echo "VENV_PATH=/tmp/venv" >> $GITHUB_ENV
           else
-             echo pip install ${LOC}
-             sudo pip install ${LOC}
+            VENV_DIR=venv
+            python -m venv $VENV_DIR
+            echo "VENV_PATH=$PWD/venv" >> $GITHUB_ENV
           fi
-      - name: Test ctest
-        if: matrix.os == 'ubuntu-22.04' && matrix.dir == 'clone' && matrix.perm == 'venv'
+          source $VENV_DIR/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          pip install pybind11 ninja cmake>=3.12 setuptools>=64 setuptools-scm>=8
+          pip install pytest>=6.0 numpy>=1.24.3 pandas>=2.0.3
+
+      - name: Build and test with pip install mode
         run: |
-          source ../venv/bin/activate
+          source ${VENV_PATH:-venv}/bin/activate
+          ./autobuild.sh --enable-tests --enable-coverage
           pip install -r test/py/requirements.txt
-          cd build/temp*/*dftracer/
-          ctest -E dlio -VV
-      - name: Create Coverage
-        if: matrix.os == 'ubuntu-22.04' && matrix.dir == 'clone' && matrix.perm == 'venv'
+
+      - name: Generate coverage data
+        if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
         run: |
-          mkdir coverage
-          FILE=$PWD/coverage/coverage.json
-          cd build
-          COVERALLS_REPO_TOKEN=${{ secrets.COVERALLS }} gcovr -r ../ . --coveralls $FILE -e ../test/ -e ../src/example
-          if [ -e '$FILE' ]; then
-          sed -i'' -e 's/"service_name": "github-actions-ci"/"service_name": "github"/' '$FILE'
+          source ${VENV_PATH:-venv}/bin/activate
+          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
+          echo "DFTRACER_DIR=$DFTRACER_DIR"
+          BUILD_DIR=$DFTRACER_DIR SOURCE_DIR=$PWD ./script/coverage_after_autobuild.sh --clean
+
+      - name: Upload Coverage to Coveralls
+        if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
+          BUILD_DIR="$DFTRACER_DIR"
+          COVERAGE_FILE="$BUILD_DIR/coverage/coveralls.json"
+
+          if [ -f "$COVERAGE_FILE" ]; then
+            echo "Uploading C/C++ coverage to Coveralls..."
+            echo "Repository: ${{ github.repository }}"
+            echo "Commit SHA: ${{ github.sha }}"
+            echo "Branch: ${{ github.ref_name }}"
+            
+            # Fix the JSON format for Coveralls
+            cat "$COVERAGE_FILE" | jq \
+              --arg token "${{ secrets.COVERALLS_REPO_TOKEN }}" \
+              --arg sha "${{ github.sha }}" \
+              --arg branch "${{ github.ref_name }}" \
+              --arg service_job_id "${{ github.run_id }}" \
+              --arg service_number "${{ github.run_number }}" \
+              '. + {
+                repo_token: $token,
+                service_name: "github",
+                service_job_id: $service_job_id,
+                service_number: $service_number,
+                git: {
+                  head: {
+                    id: $sha
+                  },
+                  branch: $branch
+                }
+              }' > "${COVERAGE_FILE}.fixed"
+            
+            echo "Coverage JSON preview:"
+            echo "Number of source files:"
+            cat "${COVERAGE_FILE}.fixed" | jq '.source_files | length'
+            echo "Sample file paths:"
+            cat "${COVERAGE_FILE}.fixed" | jq '.source_files[0:3] | .[].name'
+            echo "Full metadata (without source_files):"
+            cat "${COVERAGE_FILE}.fixed" | jq 'del(.source_files)'
+            
+            # Upload to Coveralls
+            set +e  # Don't exit on error for curl
+            RESPONSE=$(curl -s -w "\n%{http_code}" -F "json_file=@${COVERAGE_FILE}.fixed" \
+              "https://coveralls.io/api/v1/jobs")
+            CURL_EXIT=$?
+            set -e
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | head -n-1)
+            
+            echo "Response code: $HTTP_CODE"
+            echo "Response body: $BODY"
+            
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+              echo "✓ Coverage uploaded successfully!"
+              exit 0
+            else
+              echo "✗ Failed to upload coverage (HTTP $HTTP_CODE)"
+              echo "Make sure the repository is added to Coveralls: https://coveralls.io/repos/new"
+              exit 1
+            fi
+          else
+            echo "Warning: Coverage file not found at $COVERAGE_FILE"
+            ls -la "$BUILD_DIR/coverage/" || echo "Coverage directory does not exist"
+            exit 1
           fi
-          cat $FILE
-          curl -v -F json_file=@$FILE https://coveralls.io/api/v1/jobs
+            exit 1
+          fi
+
+      - name: Upload Coverage Artifacts
+        if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-coverage-reports
+          path: |
+            build/**/dftracer.dftracer/coverage/
+            build/**/dftracer.dftracer/coverage.xml
+          retention-days: 7
+
+      - name: C/C++ Coverage Summary
+        if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
+        run: |
+          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
+          BUILD_DIR="$DFTRACER_DIR"
+          SOURCE_DIR="$PWD"
+          cd "$BUILD_DIR"
+          echo "## C/C++ Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          gcovr -r "$SOURCE_DIR" . \
+            --filter "$SOURCE_DIR/src/" \
+            --filter "$SOURCE_DIR/include/" \
+            --exclude "$SOURCE_DIR/test/" \
+            --exclude "$SOURCE_DIR/examples/" \
+            --exclude "$SOURCE_DIR/dependency/" \
+            --exclude "$SOURCE_DIR/build/" \
+            --exclude "$SOURCE_DIR/install/" \
+            --exclude "$SOURCE_DIR/python/" \
+            --exclude-unreachable-branches \
+            --exclude-throw-branches >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

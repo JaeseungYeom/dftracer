@@ -1,0 +1,109 @@
+# Production Dockerfile for DFTracer with pre-installed package
+# Supports amd64 and arm64 architectures
+# This image has DFTracer pre-installed and ready to use
+
+ARG PYTHON_VERSION=3.10
+FROM python:${PYTHON_VERSION}-slim as base
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    ninja-build \
+    wget \
+    curl \
+    ca-certificates \
+    pkg-config \
+    libyaml-cpp-dev \
+    hwloc \
+    libhwloc-dev \
+    mpich \
+    libmpich-dev \
+    python3-dev \
+    python3-venv \
+    gdb \
+    vim \
+    less \
+    htop \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up working directory
+WORKDIR /workspace
+
+# Copy the entire project
+COPY . /workspace/dftracer
+
+# Install C++ dependencies
+RUN cd /workspace/dftracer/dependency && \
+    chmod +x install_dependency.sh && \
+    ./install_dependency.sh /workspace/dftracer/dependency/cpp.requirements.txt /usr/local
+
+# Create a non-root user for running dftracer
+ARG USERNAME=dftracer
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && apt-get update \
+    && apt-get install -y sudo \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set the user
+USER $USERNAME
+WORKDIR /home/$USERNAME
+
+# Create Python virtual environment
+RUN python3 -m venv ~/.venv && \
+    echo 'source ~/.venv/bin/activate' >> ~/.bashrc
+
+# Activate venv and install Python dependencies
+RUN . ~/.venv/bin/activate && \
+    pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+    pybind11 \
+    ninja \
+    cmake>=3.12 \
+    setuptools>=64 \
+    setuptools-scm>=8 \
+    pytest>=6.0 \
+    numpy>=1.24.3 \
+    pandas>=2.0.3 \
+    seaborn>=0.13.2 \
+    bokeh>=2.4.2 \
+    dask>=2023.5.0 \
+    distributed \
+    pyarrow>=12.0.1 \
+    rich>=13.6.0 \
+    python-intervals>=1.10.0.post1 \
+    matplotlib>=3.7.3
+
+# Build and install DFTracer
+ARG DFTRACER_VERSION=latest
+ENV DFTRACER_VERSION=${DFTRACER_VERSION}
+
+RUN . ~/.venv/bin/activate && \
+    cd /workspace/dftracer && \
+    pip install --no-cache-dir -e ".[test,dfanalyzer]" && \
+    echo "DFTracer ${DFTRACER_VERSION} installed successfully"
+
+# Add helpful environment setup
+RUN echo 'export PS1="\[\e[32m\]\u@dftracer\[\e[m\]:\[\e[34m\]\w\[\e[m\]\$ "' >> ~/.bashrc && \
+    echo 'echo "DFTracer ${DFTRACER_VERSION} - Ready to use!"' >> ~/.bashrc && \
+    echo 'echo "Virtual environment is already activated."' >> ~/.bashrc && \
+    echo 'echo "Try: dftracer --help"' >> ~/.bashrc
+
+WORKDIR /workspace
+
+# Default command
+CMD ["/bin/bash"]

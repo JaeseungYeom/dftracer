@@ -1,12 +1,32 @@
 
 #-----------------------------------------------------------------------------
 # Version file for install directory
+# Uses library version (not package version) for CMake compatibility checking
 #-----------------------------------------------------------------------------
-set(PACKAGE_VERSION @DFTRACER_PACKAGE_VERSION@)
+set(PACKAGE_VERSION "@DFTRACER_LIBRARY_VERSION@")
 
-if ("${PACKAGE_FIND_VERSION_MAJOR}" EQUAL @DFTRACER_VERSION_MAJOR@)
-    set(PACKAGE_VERSION_COMPATIBLE 1)
-    if ("${PACKAGE_FIND_VERSION_PATCH}" EQUAL @DFTRACER_VERSION_PATCH@)
-        set(PACKAGE_VERSION_EXACT 1)
-    endif ()
-endif ()
+# Check compatibility using SameMajorVersion mode
+# Compatible if:
+# - Requested major version equals installed major version
+# - Requested version is not newer than installed version
+if(PACKAGE_FIND_VERSION)
+    if("${PACKAGE_FIND_VERSION_MAJOR}" EQUAL "@DFTRACER_VERSION_MAJOR@")
+        # Same major version - check if requested version is not newer
+        if(NOT "${PACKAGE_FIND_VERSION}" VERSION_GREATER "@DFTRACER_LIBRARY_VERSION@")
+            set(PACKAGE_VERSION_COMPATIBLE TRUE)
+        else()
+            set(PACKAGE_VERSION_COMPATIBLE FALSE)
+        endif()
+        
+        # Exact match if all components are equal
+        if("${PACKAGE_FIND_VERSION}" VERSION_EQUAL "@DFTRACER_LIBRARY_VERSION@")
+            set(PACKAGE_VERSION_EXACT TRUE)
+        endif()
+    else()
+        # Different major version - not compatible
+        set(PACKAGE_VERSION_COMPATIBLE FALSE)
+    endif()
+else()
+    # No version specified - always compatible
+    set(PACKAGE_VERSION_COMPATIBLE TRUE)
+endif()

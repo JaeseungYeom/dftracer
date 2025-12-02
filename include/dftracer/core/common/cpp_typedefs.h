@@ -5,6 +5,11 @@
 #include <string>
 #include <unordered_map>
 
+// forward declare
+namespace dftracer {
+class Metadata;
+};
+
 // internal headers
 #include <dftracer/core/common/enumeration.h>
 #endif  // DFTRACER_CORE_CPP_TYPEDEF_H

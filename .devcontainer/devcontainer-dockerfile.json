@@ -1,0 +1,81 @@
+{
+    "name": "DFTracer Development Container",
+    "dockerFile": "../infrastructure/docker/Dockerfile.dev",
+    "context": "../..",
+    "build": {
+        "args": {
+            "PYTHON_VERSION": "3.10",
+            "USERNAME": "developer",
+            "USER_UID": "1000",
+            "USER_GID": "1000"
+        }
+    },
+    "runArgs": [
+        "--cap-add=SYS_PTRACE",
+        "--security-opt",
+        "seccomp=unconfined"
+    ],
+    "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    ],
+    "workspaceFolder": "/workspace/dftracer",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/dftracer,type=bind",
+    "remoteUser": "developer",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": true,
+            "installOhMyZsh": true,
+            "upgradePackages": true,
+            "username": "developer",
+            "userUid": "1000",
+            "userGid": "1000"
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+            "version": "latest"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": true,
+                "python.formatting.provider": "black",
+                "python.testing.pytestEnabled": true,
+                "python.testing.unittestEnabled": false,
+                "python.testing.pytestArgs": [
+                    "test"
+                ],
+                "files.watcherExclude": {
+                    "**/build/**": true,
+                    "**/dist/**": true,
+                    "**/__pycache__/**": true,
+                    "**/.pytest_cache/**": true
+                },
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "cmake.configureOnOpen": false,
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "ms-azuretools.vscode-docker",
+                "eamodio.gitlens",
+                "github.copilot",
+                "github.vscode-pull-request-github",
+                "yzhang.markdown-all-in-one",
+                "mhutchie.git-graph",
+                "redhat.vscode-yaml",
+                "streetsidesoftware.code-spell-checker"
+            ]
+        }
+    },
+    "postCreateCommand": "pip install -e .[test,dfanalyzer]",
+    "postStartCommand": "git config --global --add safe.directory /workspace/dftracer",
+    "remoteEnv": {
+        "DFTRACER_ENABLE": "0",
+        "PYTHONPATH": "/workspace/dftracer:${PYTHONPATH}"
+    }
+}

@@ -15,6 +15,7 @@ DFTracer: is a library for profiling I/O calls and application functions.
    definitions
    limitations
    build
+   docker
    building_applications
    api
    models
@@ -67,6 +68,7 @@ DFTracer: is a library for profiling I/O calls and application functions.
    developer-guide
    style-guides
    testing
+   coverage
 
 .. toctree::
    :maxdepth: 1

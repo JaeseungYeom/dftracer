@@ -102,5 +102,6 @@
     "cSpell.words": [
         "DFTRACER",
         "dlio"
-    ]
+    ],
+    "diffEditor.ignoreTrimWhitespace": true
 }
