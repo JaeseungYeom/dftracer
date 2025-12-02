@@ -603,3 +603,6 @@ set_tests_properties(${test_name} PROPERTIES WILL_FAIL TRUE)
 # ########################################################################
 # END OF NEW TESTS
 # ########################################################################
+
+# Add unit tests subdirectory
+add_subdirectory(unit)

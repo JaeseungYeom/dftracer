@@ -1,0 +1,48 @@
+# Unit tests for DFTracer core components
+
+# Test aggregator functionality
+add_executable(test_aggregator test_aggregator.cpp)
+target_link_libraries(test_aggregator ${PROJECT_NAME}_core_dbg)
+add_dependencies(test_aggregator ${PROJECT_NAME}_core_dbg)
+
+# Test configuration manager
+add_executable(test_configuration test_configuration.cpp)
+target_link_libraries(test_configuration ${PROJECT_NAME}_core_dbg yaml-cpp)
+add_dependencies(test_configuration ${PROJECT_NAME}_core_dbg)
+
+# Test serialization
+add_executable(test_serialization test_serialization.cpp)
+target_link_libraries(test_serialization ${PROJECT_NAME}_core_dbg)
+add_dependencies(test_serialization ${PROJECT_NAME}_core_dbg)
+
+# Test service
+add_executable(test_service test_service.cpp)
+target_link_libraries(test_service ${PROJECT_NAME}_core_dbg)
+add_dependencies(test_service ${PROJECT_NAME}_core_dbg)
+
+# Add tests to CTest
+set(test_name unit_test_aggregator)
+df_add_test(${test_name} ${CMAKE_BINARY_DIR}/bin/test_aggregator)
+set_common_properties(${test_name})
+
+set(test_name unit_test_configuration)
+df_add_test(${test_name} ${CMAKE_BINARY_DIR}/bin/test_configuration)
+set_common_properties(${test_name})
+
+set(test_name unit_test_serialization)
+df_add_test(${test_name} ${CMAKE_BINARY_DIR}/bin/test_serialization)
+set_common_properties(${test_name})
+
+set(test_name unit_test_service)
+df_add_test(${test_name} ${CMAKE_BINARY_DIR}/bin/test_service)
+set_common_properties(${test_name})
+
+# Existing mmap test
+add_executable(test_mmap mmap.cpp)
+target_link_libraries(test_mmap ${PROJECT_NAME}_core_dbg)
+add_dependencies(test_mmap ${PROJECT_NAME}_core_dbg)
+add_dependencies(test_mmap ${PROJECT_NAME}_preload_dbg)
+
+set(test_name unit_test_mmap)
+df_add_test(${test_name} ${CMAKE_BINARY_DIR}/bin/test_mmap)
+set_common_properties(${test_name})
