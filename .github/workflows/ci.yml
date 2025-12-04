@@ -55,6 +55,18 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
 
+      - name: Free up disk space
+        run: |
+          echo "Available disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          echo "Available disk space after cleanup:"
+          df -h
+
       - name: Install system dependencies (similar to Dockerfile.dev)
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends \
@@ -109,104 +121,86 @@ jobs:
           ./autobuild.sh --enable-tests --enable-coverage
           pip install -r test/py/requirements.txt
 
+      - name: Run unit tests (non-coverage builds)
+        if: github.event_name != 'pull_request' || matrix.python_version != '3.11' || matrix.gcc_version != '11'
+        run: |
+          source ${VENV_PATH:-venv}/bin/activate
+          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
+          echo "DFTRACER_DIR=$DFTRACER_DIR"
+          cd "$DFTRACER_DIR"
+          ctest -R unit_test
+
       - name: Generate coverage data
         if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
         run: |
           source ${VENV_PATH:-venv}/bin/activate
           DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
           echo "DFTRACER_DIR=$DFTRACER_DIR"
+          echo "COVERAGE_DIR=$DFTRACER_DIR/coverage" >> $GITHUB_ENV
           BUILD_DIR=$DFTRACER_DIR SOURCE_DIR=$PWD ./script/coverage_after_autobuild.sh --clean
+
+          # Find the base coverage file
+          COVERAGE_FILE="$DFTRACER_DIR/coverage/coveralls.json"
+          if [ ! -f "$COVERAGE_FILE" ]; then
+            echo "✗ Coverage file not found at $COVERAGE_FILE"
+            exit 1
+          fi
+
+          # Add GitHub metadata to the coverage file
+          echo "Adding GitHub metadata to coverage file..."
+          cat "$COVERAGE_FILE" | jq \
+            --arg repo "${{ github.repository }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg pr_number "${{ github.event.pull_request.number }}" \
+            --arg service_job_id "${{ github.run_id }}" \
+            --arg service_number "${{ github.run_number }}" \
+            '. + {
+              service_name: "github-actions",
+              service_job_id: $service_job_id,
+              service_number: $service_number,
+              service_pull_request: $pr_number,
+              repo_name: $repo,
+              git: {
+                head: {
+                  id: $sha
+                },
+                branch: $branch
+              }
+            }' > "${COVERAGE_FILE}.final"
+
+          mv "${COVERAGE_FILE}.final" "$COVERAGE_FILE"
+          echo "COVERAGE_FILE=$COVERAGE_FILE" >> $GITHUB_ENV
+          echo "✓ Coverage file prepared: $COVERAGE_FILE"
+
+          # Show metadata summary
+          echo "Coverage metadata:"
+          cat "$COVERAGE_FILE" | jq 'del(.source_files) | {service_name, repo_name, git, service_pull_request}'
 
       - name: Upload Coverage to Coveralls
         if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
-          BUILD_DIR="$DFTRACER_DIR"
-          COVERAGE_FILE="$BUILD_DIR/coverage/coveralls.json"
-
-          if [ -f "$COVERAGE_FILE" ]; then
-            echo "Uploading C/C++ coverage to Coveralls..."
-            echo "Repository: ${{ github.repository }}"
-            echo "Commit SHA: ${{ github.sha }}"
-            echo "Branch: ${{ github.ref_name }}"
-            
-            # Fix the JSON format for Coveralls
-            cat "$COVERAGE_FILE" | jq \
-              --arg token "${{ secrets.COVERALLS_REPO_TOKEN }}" \
-              --arg sha "${{ github.sha }}" \
-              --arg branch "${{ github.ref_name }}" \
-              --arg service_job_id "${{ github.run_id }}" \
-              --arg service_number "${{ github.run_number }}" \
-              '. + {
-                repo_token: $token,
-                service_name: "github",
-                service_job_id: $service_job_id,
-                service_number: $service_number,
-                git: {
-                  head: {
-                    id: $sha
-                  },
-                  branch: $branch
-                }
-              }' > "${COVERAGE_FILE}.fixed"
-            
-            echo "Coverage JSON preview:"
-            echo "Number of source files:"
-            cat "${COVERAGE_FILE}.fixed" | jq '.source_files | length'
-            echo "Sample file paths:"
-            cat "${COVERAGE_FILE}.fixed" | jq '.source_files[0:3] | .[].name'
-            echo "Full metadata (without source_files):"
-            cat "${COVERAGE_FILE}.fixed" | jq 'del(.source_files)'
-            
-            # Upload to Coveralls
-            set +e  # Don't exit on error for curl
-            RESPONSE=$(curl -s -w "\n%{http_code}" -F "json_file=@${COVERAGE_FILE}.fixed" \
-              "https://coveralls.io/api/v1/jobs")
-            CURL_EXIT=$?
-            set -e
-            
-            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-            BODY=$(echo "$RESPONSE" | head -n-1)
-            
-            echo "Response code: $HTTP_CODE"
-            echo "Response body: $BODY"
-            
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-              echo "✓ Coverage uploaded successfully!"
-              exit 0
-            else
-              echo "✗ Failed to upload coverage (HTTP $HTTP_CODE)"
-              echo "Make sure the repository is added to Coveralls: https://coveralls.io/repos/new"
-              exit 1
-            fi
-          else
-            echo "Warning: Coverage file not found at $COVERAGE_FILE"
-            ls -la "$BUILD_DIR/coverage/" || echo "Coverage directory does not exist"
-            exit 1
-          fi
-            exit 1
-          fi
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          coveralls-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          file: ${{ env.COVERAGE_FILE }}
+          format: coveralls
+          flag-name: cpp-coverage
+          parallel: false
 
       - name: Upload Coverage Artifacts
         if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
         uses: actions/upload-artifact@v4
         with:
           name: cpp-coverage-reports
-          path: |
-            build/**/dftracer.dftracer/coverage/
-            build/**/dftracer.dftracer/coverage.xml
+          path: ${{ env.COVERAGE_DIR }}
           retention-days: 7
 
       - name: C/C++ Coverage Summary
         if: github.event_name == 'pull_request' && matrix.python_version == '3.11' && matrix.gcc_version == '11'
         run: |
-          DFTRACER_DIR=$(realpath $(find build -type d -name "dftracer.dftracer" | head -n 1))
-          BUILD_DIR="$DFTRACER_DIR"
           SOURCE_DIR="$PWD"
-          cd "$BUILD_DIR"
+          cd "$(dirname ${{ env.COVERAGE_FILE }})"
           echo "## C/C++ Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           gcovr -r "$SOURCE_DIR" . \

@@ -99,6 +99,8 @@ class CMakeBuild(build_ext):
         cmake_args += [f"-DDFTRACER_PYTHON_EXE={sys.executable}"]
         cmake_args += [f"-DDFTRACER_PYTHON_SITE={python_site}"]
         cmake_args += [f"-DCMAKE_INSTALL_PREFIX={install_prefix}"]
+        automatic_detection = os.environ.get("DFTRACER_ENABLE_DYNAMIC_DETECTION", "OFF")
+        cmake_args += [f"-DDFTRACER_ENABLE_DYNAMIC_DETECTION={automatic_detection}"]
         cmake_args += [
             f"-DCMAKE_PREFIX_PATH={install_prefix}",
             f"-Dpybind11_DIR={py_cmake_dir}",

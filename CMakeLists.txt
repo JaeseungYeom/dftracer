@@ -126,18 +126,10 @@ include(dftracer-utils)
 option(DFTRACER_WARNINGS_AS_ERRORS "Build with warnings promoted to errors." OFF)
 mark_as_advanced(DFTRACER_WARNINGS_AS_ERRORS)
 
-option(DFTRACER_USE_CLANG_LIBCXX OFF)
-
-if(DFTRACER_USE_CLANG_LIBCXX)
-        set(GCC_TOOLCHAIN "")
-endif(DFTRACER_USE_CLANG_LIBCXX)
-
-# Options
-option(DFTRACER_DISABLE_HWLOC "Disable HWLOC" On)
-
-if(NOT DFTRACER_DISABLE_HWLOC)
-        set(DFTRACER_HWLOC_ENABLE 1)
-endif()
+option (DFTRACER_USE_CLANG_LIBCXX OFF)
+if (DFTRACER_USE_CLANG_LIBCXX)
+    set (GCC_TOOLCHAIN "")
+endif (DFTRACER_USE_CLANG_LIBCXX)
 
 # Options
 option(DFTRACER_ENABLE_FTRACING "Enable Function Tracing" OFF)
@@ -149,20 +141,7 @@ else()
         set(DFTRACER_FUNCTION_FLAGS)
 endif()
 
-# Options
-option(DFTRACER_ENABLE_HIP_TRACING "Enable HIP Tracing" OFF)
-
-if(DFTRACER_ENABLE_HIP_TRACING)
-        set(DFTRACER_HIP_TRACING_ENABLE 1)
-endif()
-
-option(DFTRACER_ENABLE_MPI "Enable MPI" OFF)
-
-if(DFTRACER_ENABLE_MPI)
-        set(DFTRACER_MPI_ENABLE 1)
-endif()
-
-option(DFTRACER_BUILD_PYTHON_BINDINGS "Build python bindings." ON)
+option (DFTRACER_BUILD_PYTHON_BINDINGS "Build python bindings." ON)
 set(DFTRACER_PYTHON_EXE "python3" CACHE STRING "Python executable to use for building.")
 set(DFTRACER_PYTHON_SITE $ENV{DFTRACER_PYTHON_SITE} CACHE STRING "Python site packages to use for building.")
 
@@ -182,6 +161,21 @@ if(DFTRACER_BUILD_PYTHON_BINDINGS)
         include_directories(${PYTHON_SITE_PACKAGES}/dftracer/include)
         link_directories(${PYTHON_SITE_PACKAGES}/dftracer/lib)
 endif()
+
+# Check optional dependencies
+option (DFTRACER_DISABLE_HWLOC "Disable HWLOC" ON)
+if (NOT DFTRACER_DISABLE_HWLOC)
+    set(DFTRACER_HWLOC_ENABLE 1)
+endif()
+option (DFTRACER_ENABLE_HIP_TRACING "Enable HIP Tracing" OFF)
+if (DFTRACER_ENABLE_HIP_TRACING)
+    set(DFTRACER_HIP_TRACING_ENABLE 1)
+endif()
+option (DFTRACER_ENABLE_MPI "Enable MPI" OFF)
+if (DFTRACER_ENABLE_MPI)
+    set(DFTRACER_MPI_ENABLE 1)
+endif()
+option (DFTRACER_ENABLE_DYNAMIC_DETECTION "Enable Dynamic Detection" OFF)
 
 # install dependency
 option(DFTRACER_INSTALL_DEPENDENCIES "Install DFTracer dependencies" OFF)
@@ -308,92 +302,80 @@ else()
 
         # Optional Dependencies
         # =============================================================================
-        if(DFTRACER_BUILD_PYTHON_BINDINGS)
+        if (DFTRACER_BUILD_PYTHON_BINDINGS)
                 find_package(pybind11 REQUIRED)
-
-                # add_subdirectory(dependency/py11bind)
+                #add_subdirectory(dependency/py11bind)
         endif()
-
-        if(DFTRACER_ENABLE_MPI)
-                find_package(MPI COMPONENTS CXX REQUIRED)
-
-                if(MPI_FOUND)
-                        message(STATUS "[DFTRACER] found mpi.h at ${MPI_CXX_INCLUDE_DIRS}")
-                        include_directories(${MPI_CXX_INCLUDE_DIRS})
-                        set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${MPI_CXX_LIBRARIES})
-
-                        # Get the directory of each MPI_CXX_LIBRARY and append to MPI_CXX_LIBRARY_DIRS
-                        set(MPI_CXX_LIBRARY_DIRS "")
-
-                        foreach(_lib ${MPI_CXX_LIBRARIES})
-                                get_filename_component(_lib_dir "${_lib}" DIRECTORY)
-
-                                if(_lib_dir)
-                                        list(APPEND MPI_CXX_LIBRARY_DIRS "${_lib_dir}")
-                                endif()
-                        endforeach()
-
-                        list(REMOVE_DUPLICATES MPI_CXX_LIBRARY_DIRS)
-
-                        if(DEFINED MPI_CXX_LIBRARY_DIRS)
-                                list(APPEND DEPENDENCY_LIBRARY_DIRS ${MPI_CXX_LIBRARY_DIRS})
+        find_package(MPI COMPONENTS CXX QUIET)
+        if (MPI_CXX_FOUND AND (DFTRACER_ENABLE_MPI OR DFTRACER_ENABLE_DYNAMIC_DETECTION))
+                message(STATUS "[${PROJECT_NAME}] MPI found at ${MPI_CXX_INCLUDE_DIRS}.")
+                set(DFTRACER_MPI_ENABLE 1)
+                include_directories(${MPI_CXX_INCLUDE_DIRS})
+                set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${MPI_CXX_LIBRARIES})
+                # Get the directory of each MPI_CXX_LIBRARY and append to MPI_CXX_LIBRARY_DIRS
+                set(MPI_CXX_LIBRARY_DIRS "")
+                foreach(_lib ${MPI_CXX_LIBRARIES})
+                        get_filename_component(_lib_dir "${_lib}" DIRECTORY)
+                        if (_lib_dir)
+                                list(APPEND MPI_CXX_LIBRARY_DIRS "${_lib_dir}")
                         endif()
-                else()
-                        message(FATAL_ERROR "-- [DFTRACER] mpi is needed for ${PROJECT_NAME} build")
+                endforeach()
+                list(REMOVE_DUPLICATES MPI_CXX_LIBRARY_DIRS)
+                if (DEFINED MPI_CXX_LIBRARY_DIRS)
+                        list(APPEND DEPENDENCY_LIBRARY_DIRS ${MPI_CXX_LIBRARY_DIRS})
                 endif()
-        endif()
+        else ()
+                message(STATUS "[${PROJECT_NAME}] MPI not found.")
+                set(DFTRACER_MPI_ENABLE 0)
+        endif ()
 
-        if(NOT DFTRACER_DISABLE_HWLOC)
-                find_package(HWLOC REQUIRED)
 
-                if(${HWLOC_FOUND})
-                        include_directories(${HWLOC_INCLUDE_DIRS})
-                        set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${HWLOC_LIBRARIES})
+        find_package(HWLOC QUIET)
 
-                        if(DEFINED HWLOC_LIBDIR)
-                                list(APPEND DEPENDENCY_LIBRARY_DIRS ${HWLOC_LIBDIR})
-                        endif()
-
-                        message(STATUS "[DFTRACER] found hwloc at ${HWLOC_INCLUDE_DIRS}")
-                else()
-                        message(FATAL_ERROR "-- [DFTRACER] hwloc is needed for ${PROJECT_NAME} build with -DDFTRACER_DISABLE_HWLOC-ON option.")
+        if (HWLOC_FOUND AND (NOT DFTRACER_DISABLE_HWLOC OR DFTRACER_ENABLE_DYNAMIC_DETECTION))
+                set(DFTRACER_HWLOC_ENABLE 1)
+                include_directories(${HWLOC_INCLUDE_DIRS})
+                set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${HWLOC_LIBRARIES})
+                if (DEFINED HWLOC_LIBDIR)
+                        list(APPEND DEPENDENCY_LIBRARY_DIRS ${HWLOC_LIBDIR})
                 endif()
+                message(STATUS "[DFTRACER] found hwloc at ${HWLOC_INCLUDE_DIRS}")
+        else ()
+                message(STATUS "[DFTRACER] hwloc not found")
+                set(DFTRACER_HWLOC_ENABLE 0)
+        endif ()
+
+
+        find_package(rocprofiler-sdk QUIET)
+        if (rocprofiler-sdk_FOUND AND (DFTRACER_ENABLE_HIP_TRACING OR DFTRACER_ENABLE_DYNAMIC_DETECTION))
+                set(DFTRACER_HIP_TRACING_ENABLE 1)
+                message(STATUS "[DFTRACER] found rocprofiler-sdk at ${rocprofiler-sdk_INCLUDE_DIR}")
+                set(HIP_TRACING_LIBRARIES rocprofiler-sdk::rocprofiler-sdk)
+                set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${HIP_TRACING_LIBRARIES})
+        else()
+                message(STATUS "-- [DFTRACER] rocprofiler-sdk is not found.")
         endif()
 
         find_package(ZLIB REQUIRED)
-
-        if(ZLIB_FOUND)
+        if (ZLIB_FOUND)
                 message(STATUS "[DFTRACER] found zlib at ${ZLIB_INCLUDE_DIRS}")
                 include_directories(${ZLIB_INCLUDE_DIRS})
                 set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${ZLIB_LIBRARIES})
                 get_filename_component(ZLIB_LIBRARY "${ZLIB_LIBRARIES}" DIRECTORY)
                 set(ZLIB_LIBRARY_DIR "${ZLIB_LIBRARY}")
-
                 # Get absolute path for ZLIB_LIBRARY_DIR
                 get_filename_component(ZLIB_LIBRARY_DIR "${ZLIB_LIBRARY_DIR}" ABSOLUTE)
-
-                if(DEFINED ZLIB_LIBRARY_DIR)
+                if (DEFINED ZLIB_LIBRARY_DIR)
                         list(APPEND DEPENDENCY_LIBRARY_DIRS ${ZLIB_LIBRARY_DIR})
                 endif()
-
-                if(DEFINED ZLIB_LIBRARY_DIRS)
+                if (DEFINED ZLIB_LIBRARY_DIRS)
                         list(APPEND DEPENDENCY_LIBRARY_DIRS ${ZLIB_LIBRARY_DIRS})
                 endif()
-        else()
+        else ()
                 message(FATAL_ERROR "-- [DFTRACER] zlib is needed for ${PROJECT_NAME} build")
-        endif()
+        endif ()
 
-        if(DFTRACER_ENABLE_HIP_TRACING)
-                find_package(rocprofiler-sdk REQUIRED)
-
-                if(rocprofiler-sdk_FOUND)
-                        message(STATUS "[DFTRACER] found rocprofiler-sdk at ${ROCPROFILER_SDK_INCLUDE_DIRS}")
-                        set(HIP_TRACING_LIBRARIES rocprofiler-sdk::rocprofiler-sdk)
-                        set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${HIP_TRACING_LIBRARIES})
-                else()
-                        message(FATAL_ERROR "-- [DFTRACER] rocprofiler-sdk is needed for ${PROJECT_NAME} build")
-                endif()
-        endif()
+        # print_all_variables()
 
         # Set RPATH to all dependency library dirs
         list(REMOVE_DUPLICATES DEPENDENCY_LIBRARY_DIRS)
@@ -921,43 +903,42 @@ else()
         string(APPEND _str "\n")
 
         string(APPEND _str
-                "  DFTRACER_LIBRARY_VERSION:        ${DFTRACER_LIBRARY_VERSION}\n")
+        "  DFTRACER_PACKAGE_VERSION:        ${DFTRACER_PACKAGE_VERSION}\n")
         string(APPEND _str
-                "  DFTRACER_PACKAGE_VERSION:        ${DFTRACER_PACKAGE_VERSION_FULL}\n")
+        "  DFTRACER_GIT_VERSION:            ${DFTRACER_GIT_VERSION}\n")
         string(APPEND _str
-                "  DFTRACER_GIT_VERSION:            ${DFTRACER_GIT_VERSION}\n")
+        "  GLIBC_VERSION:               ${GLIBC_VERSION}\n")
         string(APPEND _str
-                "  GLIBC_VERSION:               ${GLIBC_VERSION}\n")
+        "  DFTRACER_PYTHON_EXE:               ${DFTRACER_PYTHON_EXE}\n")
         string(APPEND _str
-                "  DFTRACER_PYTHON_EXE:               ${DFTRACER_PYTHON_EXE}\n")
+        "  DFTRACER_PYTHON_SITE:               ${DFTRACER_PYTHON_SITE}\n")
         string(APPEND _str
-                "  DFTRACER_PYTHON_SITE:               ${DFTRACER_PYTHON_SITE}\n")
+        "  MAIN_PYTHON_SITE_PACKAGES:               ${MAIN_PYTHON_SITE_PACKAGES}\n")
         string(APPEND _str
-                "  MAIN_PYTHON_SITE_PACKAGES:               ${MAIN_PYTHON_SITE_PACKAGES}\n")
+        "  DEPENDENCY_LIB:               ${DEPENDENCY_LIB}\n")
         string(APPEND _str
-                "  DEPENDENCY_LIB:               ${DEPENDENCY_LIB}\n")
+        "  CMAKE_BUILD_RPATH:               ${CMAKE_BUILD_RPATH}\n")
         string(APPEND _str
-                "  CMAKE_BUILD_RPATH:               ${CMAKE_BUILD_RPATH}\n")
-        string(APPEND _str
-                "  CMAKE_INSTALL_RPATH:             ${CMAKE_INSTALL_RPATH}\n")
-
-        # Print the true/false variables
+        "  CMAKE_INSTALL_RPATH:             ${CMAKE_INSTALL_RPATH}\n")
+        
+        
+        #Print the true/false variables
         append_str_tf(_str
-                DFTRACER_GNU_LINUX
-                DFTRACER_LIBDIR_AS_LIB
-                DFTRACER_ENABLE_FTRACING
-                DFTRACER_ENABLE_HIP_TRACING
-                DFTRACER_ENABLE_MPI
-                DFTRACER_DISABLE_HWLOC
-                DFTRACER_USE_CLANG_LIBCXX
-                DFTRACER_WARNINGS_AS_ERRORS
-                DFTRACER_BUILD_PYTHON_BINDINGS
-                DFTRACER_ENABLE_TESTS
-                DFTRACER_ENABLE_DLIO_BENCHMARK_TESTS
-                DFTRACER_ENABLE_PAPER_TESTS
+        DFTRACER_GNU_LINUX
+        DFTRACER_LIBDIR_AS_LIB
+        DFTRACER_ENABLE_FTRACING
+        DFTRACER_ENABLE_MPI
+        DFTRACER_HWLOC_ENABLE
+        DFTRACER_HIP_TRACING_ENABLE
+        DFTRACER_USE_CLANG_LIBCXX
+        DFTRACER_WARNINGS_AS_ERRORS
+        DFTRACER_BUILD_PYTHON_BINDINGS
+        DFTRACER_ENABLE_TESTS
+        DFTRACER_ENABLE_DLIO_BENCHMARK_TESTS
+        DFTRACER_ENABLE_PAPER_TESTS
         )
         string(APPEND _str
-                "\n== End DFTRACER Configuration Summary ==\n")
+        "\n== End DFTRACER Configuration Summary ==\n")
 
         # Output to stdout
         execute_process(COMMAND ${CMAKE_COMMAND} -E echo "${_str}")

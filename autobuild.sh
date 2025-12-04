@@ -21,6 +21,7 @@ ENABLE_TESTS="${DFTRACER_ENABLE_TESTS:-OFF}"
 ENABLE_FTRACING="${DFTRACER_ENABLE_FTRACING:-OFF}"
 ENABLE_HIP_TRACING="${DFTRACER_ENABLE_HIP_TRACING:-OFF}"
 ENABLE_MPI="${DFTRACER_ENABLE_MPI:-OFF}"
+ENABLE_DYNAMIC_DETECTION="${DFTRACER_ENABLE_DYNAMIC_DETECTION:-OFF}"
 DISABLE_HWLOC="${DFTRACER_DISABLE_HWLOC:-ON}"
 ENABLE_DLIO_TESTS="${DFTRACER_ENABLE_DLIO_BENCHMARK_TESTS:-OFF}"
 ENABLE_PAPER_TESTS="${DFTRACER_ENABLE_PAPER_TESTS:-OFF}"
@@ -53,6 +54,7 @@ OPTIONS:
     --enable-ftracing       Enable function tracing
     --enable-hip            Enable HIP tracing
     --enable-mpi            Enable MPI support
+    --enable-dynamic-detection Enable dynamic detection of MPI, HWLOC, and HIP at runtime
     --enable-hwloc          Enable HWLOC (default: disabled)
     --enable-dlio-tests     Enable DLIO benchmark tests
     --enable-paper-tests    Enable paper tests
@@ -71,6 +73,7 @@ ENVIRONMENT VARIABLES (same as setup.py):
     DFTRACER_ENABLE_FTRACING                Enable function tracing (ON/OFF)
     DFTRACER_ENABLE_HIP_TRACING             Enable HIP tracing (ON/OFF)
     DFTRACER_ENABLE_MPI                     Enable MPI (ON/OFF)
+    DFTRACER_ENABLE_DYNAMIC_DETECTION       Enable dynamic detection (ON/OFF)
     DFTRACER_DISABLE_HWLOC                  Disable HWLOC (ON/OFF)
     DFTRACER_ENABLE_DLIO_BENCHMARK_TESTS    Enable DLIO tests (ON/OFF)
     DFTRACER_ENABLE_PAPER_TESTS             Enable paper tests (ON/OFF)
@@ -185,6 +188,11 @@ while [[ $# -gt 0 ]]; do
         --enable-mpi)
             ENABLE_MPI="ON"
             export DFTRACER_ENABLE_MPI="ON"
+            shift
+            ;;
+        --enable-dynamic-detection)
+            ENABLE_DYNAMIC_DETECTION="ON"
+            export DFTRACER_ENABLE_DYNAMIC_DETECTION="ON"
             shift
             ;;
         --enable-hwloc)

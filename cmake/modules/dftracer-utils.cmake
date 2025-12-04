@@ -171,3 +171,13 @@ function(dftracer_debug_config target_list)
     target_compile_options(${target} PRIVATE -g -O0)
   endforeach()
 endfunction()
+
+function(print_all_variables)
+    message(STATUS "CMake Variables:")
+    get_cmake_property(_variableNames VARIABLES)
+    list(SORT _variableNames)
+
+    foreach(_variableName ${_variableNames})
+        message(STATUS "${_variableName}=${${_variableName}}")
+    endforeach()
+endfunction()
