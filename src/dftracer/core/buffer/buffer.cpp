@@ -9,6 +9,17 @@ namespace dftracer {
 
 void BufferManager::compress_and_write_if_needed(size_t size, bool force) {
   if (force || buffer_pos + size > this->config->write_buffer_size) {
+    // On forced flush, serialize any remaining aggregated data
+    if (force && this->config->aggregation_enable) {
+      auto data = dftracer::AggregatedDataType();
+      bool has_data = this->aggregator->get_previous_aggregations(data, false);
+      if (has_data) {
+        size_t agg_size = this->serializer->aggregated(
+            buffer + buffer_pos + size, 0, rank, data);
+        size += agg_size;
+      }
+    }
+
     if (this->config->compression) {
       size = this->compressor->compress(buffer, buffer_pos + size);
     } else {
@@ -92,12 +103,16 @@ void BufferManager::log_data_event(int index, ConstEventNameType event_name,
       enable_tracing = !this->aggregator->should_aggregate(&aggregated_key);
     }
     if (!enable_tracing) {
-      bool needs_writing = this->aggregator->aggregate(aggregated_key);
-      if (needs_writing) {
+      // Accumulate data; returns true when time interval changes
+      bool interval_changed = this->aggregator->aggregate(aggregated_key);
+      // Serialize aggregated data when moving to new time interval
+      if (interval_changed) {
         auto data = dftracer::AggregatedDataType();
-        this->aggregator->get_previous_aggregations(data);
-        size = this->serializer->aggregated(buffer + buffer_pos, index,
-                                            process_id, data);
+        this->aggregator->get_previous_aggregations(data, false);
+        if (!data.empty()) {
+          size = this->serializer->aggregated(buffer + buffer_pos, index,
+                                              process_id, data);
+        }
       }
     }
   }

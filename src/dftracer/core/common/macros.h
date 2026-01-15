@@ -33,6 +33,29 @@
     BLOCK;                                                                   \
   }
 
+#define DFTRACER_ANY_NUM_AGGREGATE_UPDATE_MACRO(TYPE, VALUE, BLOCK)    \
+  if (id == typeid(TYPE)) {                                            \
+    auto this_casted =                                                 \
+        dynamic_cast<dftracer::NumberAggregationValue<TYPE> *>(this);  \
+    auto value_casted =                                                \
+        dynamic_cast<dftracer::NumberAggregationValue<TYPE> *>(VALUE); \
+    if (this_casted && value_casted) {                                 \
+      this_casted->update(value_casted);                               \
+    }                                                                  \
+    return;                                                            \
+  }
+
+#define DFTRACER_ANY_GENERAL_AGGREGATE_UPDATE_MACRO(TYPE, VALUE, BLOCK)       \
+  if (id == typeid(TYPE)) {                                                   \
+    auto this_casted = dynamic_cast<dftracer::AggregatedValue<TYPE> *>(this); \
+    auto value_casted =                                                       \
+        dynamic_cast<dftracer::AggregatedValue<TYPE> *>(VALUE);               \
+    if (this_casted && value_casted) {                                        \
+      this_casted->update(value_casted);                                      \
+    }                                                                         \
+    return;                                                                   \
+  }
+
 #define DFTRACER_COMPARE_TYPE(TYPE, VALUE, BLOCK)            \
   if (a.type() == typeid(TYPE)) {                            \
     return std::any_cast<TYPE>(a) == std::any_cast<TYPE>(b); \

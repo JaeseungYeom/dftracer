@@ -37,17 +37,19 @@ bool Aggregator::aggregate(AggregatedKey& aggregated_key) {
   insert_number_value(aggregated_key.time_interval, aggregated_key, "dur",
                       aggregated_key.duration);
   for (const auto& [key, value] : *aggregated_key.additional_keys) {
-    if (value.first == MetadataType::MT_VALUE) {
-      DFTRACER_FOR_EACH_NUMERIC_TYPE(DFTRACER_ANY_CAST_MACRO, value.second, {
-        insert_number_value(aggregated_key.time_interval, aggregated_key, key,
-                            res.value());
-        continue;
-      })
-      DFTRACER_FOR_EACH_STRING_TYPE(DFTRACER_ANY_CAST_MACRO, value.second, {
-        insert_general_value(aggregated_key.time_interval, aggregated_key, key,
-                             res.value());
-        continue;
-      })
+    if (std::get<0>(value) == MetadataType::MT_VALUE) {
+      DFTRACER_FOR_EACH_NUMERIC_TYPE(
+          DFTRACER_ANY_CAST_MACRO, std::get<1>(value), {
+            insert_number_value(aggregated_key.time_interval, aggregated_key,
+                                key, res.value());
+            continue;
+          })
+      DFTRACER_FOR_EACH_STRING_TYPE(
+          DFTRACER_ANY_CAST_MACRO, std::get<1>(value), {
+            insert_general_value(aggregated_key.time_interval, aggregated_key,
+                                 key, res.value());
+            continue;
+          })
     }
   }
 

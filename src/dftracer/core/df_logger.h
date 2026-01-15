@@ -264,7 +264,7 @@ class DFTLogger {
 
   inline TimeResolution get_time() {
     DFTRACER_LOG_DEBUG("DFTLogger.get_time", "");
-    struct timeval tv{};
+    struct timeval tv {};
     gettimeofday(&tv, NULL);
     TimeResolution t = 1000000 * tv.tv_sec + tv.tv_usec;
     return t;
@@ -310,7 +310,7 @@ class DFTLogger {
       if (metadata != nullptr) {
         auto iter = metadata->find("tid");
         if (iter != metadata->end()) {
-          tid = std::any_cast<ThreadID>(iter->second.second);
+          tid = std::any_cast<ThreadID>(std::get<1>(iter->second));
           metadata->erase("tid");
         }
       }
@@ -321,9 +321,10 @@ class DFTLogger {
       local_index = index.load();
     }
     if (metadata != nullptr && !is_aggregated) {
-      metadata->insert_or_assign("level", level);
+      metadata->insert_or_assign("level", level, MetadataType::MT_VALUE);
       int parent_index_value = get_parent();
-      metadata->insert_or_assign("p_idx", parent_index_value);
+      metadata->insert_or_assign("p_idx", parent_index_value,
+                                 MetadataType::MT_VALUE);
     }
     handle_mpi(tid);
     if (include_metadata) {
