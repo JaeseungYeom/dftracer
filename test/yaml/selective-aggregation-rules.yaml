@@ -1,2 +1,2 @@
 inclusion:
-  - dur < 100
+  - dur < 10000

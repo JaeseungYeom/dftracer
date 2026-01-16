@@ -6,6 +6,8 @@ from time import time
 from dftracer.python import dftracer, dft_fn
 import random
 import statistics
+import subprocess
+import glob
 
 log_inst = dftracer.initialize_log(logfile=None, data_dir=None, process_id=-1)
 
@@ -58,18 +60,24 @@ def main(argc, argv):
         if MPI.COMM_WORLD.rank == 0:
             logging.info(f"Starting iteration {iter_num}")
         
+        # Create per-iteration filename by copying base file
+        iter_path = f"{dir}/file_{MPI.COMM_WORLD.rank}-{MPI.COMM_WORLD.size}_iter{iter_num}.bat"
+        import shutil
+        shutil.copy(path, iter_path)
+        
         operation_time = Timer()
         operation_time.resume_time()
-        f = open(path, "w+")
+        f = open(iter_path, "r+b")
         operation_time.pause_time()
         
         for i in range(num_operations):
-            write_size = operation_sizes[i] if use_distribution else transfer_size
-            buffer = 'w' * write_size
+            read_size = operation_sizes[i] if use_distribution else transfer_size
             
             operation_time.resume_time()
-            f.write(buffer)
+            data = f.read(read_size)
             operation_time.pause_time()
+            assert len(data) > 0
+            assert read_size == len(data)
 
         operation_time.resume_time()
         f.close()
@@ -81,13 +89,63 @@ def main(argc, argv):
             logging.info(f"Iteration {iter_num} time: {total_time}")
         
         MPI.COMM_WORLD.barrier()
-        if os.path.exists(path):
-            os.remove(path)
+        # Clean up iteration file to avoid caching
+        if os.path.exists(iter_path):
+            os.remove(iter_path)
     
     if MPI.COMM_WORLD.rank == 0:
-        avg_time = statistics.mean(iteration_times)
-        std_dev = statistics.stdev(iteration_times) if len(iteration_times) > 1 else 0.0
-        print(f"[DFTRACER PRINT],{MPI.COMM_WORLD.size},{num_operations},{transfer_size},{avg_time},{std_dev},{'yes' if use_distribution else 'no'}")
+        sorted_times = sorted(iteration_times)
+        min_time = min(iteration_times)
+        max_time = max(iteration_times)
+        
+        # Calculate median
+        if len(iteration_times) % 2 == 0:
+            median_time = (sorted_times[len(iteration_times) // 2 - 1] + sorted_times[len(iteration_times) // 2]) / 2.0
+        else:
+            median_time = sorted_times[len(iteration_times) // 2]
+        
+        # Calculate 25th percentile
+        p25_idx = int((len(iteration_times) - 1) * 0.25)
+        p25_time = sorted_times[p25_idx]
+        
+        # Calculate 75th percentile
+        p75_idx = int((len(iteration_times) - 1) * 0.75)
+        p75_time = sorted_times[p75_idx]
+        
+        # Calculate mean and std_dev for values within [p25, p75]
+        values_within = sorted_times[p25_idx:p75_idx+1]
+        mean_within = statistics.mean(values_within)
+        std_dev_within = statistics.stdev(values_within) if len(values_within) > 1 else 0.0
+        
+        # Get log file stats if DFTRACER_LOG_FILE is set
+        size_mb = 0.0
+        num_events = 0
+        log_file = os.environ.get("DFTRACER_LOG_FILE")
+        if log_file:
+            # Find all files matching the log file pattern
+            log_dir = os.path.dirname(log_file)
+            log_prefix = os.path.basename(log_file)
+            try:
+                matching_files = glob.glob(os.path.join(log_dir, f"{log_prefix}*"))
+                if matching_files:
+                    # Calculate total size in MB
+                    total_size = sum(os.path.getsize(f) for f in matching_files if os.path.isfile(f))
+                    size_mb = total_size / (1024.0 * 1024.0)
+                    
+                    # Count total lines (events) using zcat/cat with wc -l
+                    for log_f in matching_files:
+                        try:
+                            result = subprocess.run(f"zcat {log_f} 2>/dev/null || cat {log_f}", 
+                                                  shell=True, capture_output=True, text=True)
+                            if result.stdout:
+                                num_events += len(result.stdout.strip().split('\n'))
+                        except:
+                            pass
+            except Exception as e:
+                logging.warning(f"Failed to get log file stats: {e}")
+        
+        print(f"scale,ops,ts,min,p25,median,p75,max,mean,std_dev,distribution,size_mb,num_events")
+        print(f"{MPI.COMM_WORLD.size},{num_operations},{transfer_size},{min_time},{p25_time},{median_time},{p75_time},{max_time},{mean_within},{std_dev_within},{'yes' if use_distribution else 'no'},{size_mb},{num_events}")
     MPI.COMM_WORLD.barrier()
     log_inst.finalize()
 

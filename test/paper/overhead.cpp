@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
     uint64_t small_ops = (num_operations * 80) / 100;
     uint64_t large_ops = num_operations - small_ops;
 
-    std::uniform_int_distribution<uint64_t> small_dist(1024, 65536);
+    std::uniform_int_distribution<uint64_t> small_dist(1024, 4096);
     std::uniform_int_distribution<uint64_t> large_dist(65536, transfer_size);
 
     for (uint64_t i = 0; i < small_ops; ++i) {
@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
 
   char* buf = (char*)malloc(transfer_size);
   std::vector<double> iteration_times;
-  const int num_iterations = 10;
+  const int num_iterations = 25;
 
   for (int iter = 0; iter < num_iterations; ++iter) {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -145,9 +145,18 @@ int main(int argc, char* argv[]) {
       DFTRACER_LOG_INFO("Starting iteration %d", iter);
     }
 
+    // Create per-iteration filename by copying base shared file
+    char iter_filename[4096];
+    sprintf(iter_filename, "%s/file_%d-%d_iter%d.bat", argv[2], my_rank,
+            comm_size, iter);
+    std::string cmd = "cp " + std::string(filename_primary) + " " +
+                      std::string(iter_filename);
+    int cp_status = system(cmd.c_str());
+    assert(cp_status == 0);
+
     Timer operation_timer;
     operation_timer.resumeTime();
-    int fd = open(filename, O_RDONLY);
+    int fd = open(iter_filename, O_RDONLY);
     operation_timer.pauseTime();
     assert(fd != -1);
 
@@ -179,27 +188,97 @@ int main(int argc, char* argv[]) {
       iteration_times.push_back(total_time);
       DFTRACER_LOG_PRINT("Iteration %d time: %f", iter, total_time);
     }
+
+    // Clean up iteration file to avoid caching
+    if (fs::exists(iter_filename)) {
+      fs::remove(iter_filename);
+    }
   }
   free(buf);
 
   if (my_rank == 0) {
-    // Calculate average and standard deviation
-    double sum = 0.0;
-    for (double t : iteration_times) {
-      sum += t;
-    }
-    double avg_time = sum / num_iterations;
+    // Sort for min, max, median, percentiles
+    std::vector<double> sorted_times = iteration_times;
+    std::sort(sorted_times.begin(), sorted_times.end());
 
-    double variance = 0.0;
-    for (double t : iteration_times) {
-      variance += (t - avg_time) * (t - avg_time);
+    double min_time = sorted_times.front();
+    double max_time = sorted_times.back();
+
+    // Calculate median
+    double median_time;
+    if (num_iterations % 2 == 0) {
+      median_time = (sorted_times[num_iterations / 2 - 1] +
+                     sorted_times[num_iterations / 2]) /
+                    2.0;
+    } else {
+      median_time = sorted_times[num_iterations / 2];
     }
-    double std_dev = std::sqrt(variance / num_iterations);
+
+    // Calculate 25th percentile (Q1)
+    int p25_idx = (num_iterations - 1) * 25 / 100;
+    double p25_time = sorted_times[p25_idx];
+
+    // Calculate 75th percentile (Q3)
+    int p75_idx = (num_iterations - 1) * 75 / 100;
+    double p75_time = sorted_times[p75_idx];
+
+    // Calculate mean and std_dev for values within [p25, p75]
+    double sum_within = 0.0;
+    int count_within = 0;
+    for (int i = p25_idx; i <= p75_idx; ++i) {
+      sum_within += sorted_times[i];
+      count_within++;
+    }
+    double mean_within = sum_within / count_within;
+
+    double variance_within = 0.0;
+    for (int i = p25_idx; i <= p75_idx; ++i) {
+      variance_within +=
+          (sorted_times[i] - mean_within) * (sorted_times[i] - mean_within);
+    }
+    double std_dev_within = std::sqrt(variance_within / count_within);
+
+    // Get log file stats if DFTRACER_LOG_FILE is set
+    double size_mb = 0.0;
+    long num_events = 0;
+    const char* log_file = getenv("DFTRACER_LOG_FILE");
+    if (log_file) {
+      std::string cmd = "find $(dirname " + std::string(log_file) +
+                        ") -maxdepth 1 -name \"$(basename " +
+                        std::string(log_file) +
+                        ")*\" -type f -exec du -c {} + 2>/dev/null | tail -1 | "
+                        "awk '{print $1}'";
+      FILE* pipe = popen(cmd.c_str(), "r");
+      if (pipe) {
+        char buffer[128];
+        if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+          size_mb = std::atoll(buffer) / 1024.0;
+        }
+        pclose(pipe);
+      }
+
+      cmd = "find $(dirname " + std::string(log_file) +
+            ") -maxdepth 1 -name \"$(basename " + std::string(log_file) +
+            ")*\" -type f -exec sh -c 'zcat {} 2>/dev/null || cat {}' \\; "
+            "2>/dev/null | wc -l";
+      pipe = popen(cmd.c_str(), "r");
+      if (pipe) {
+        char buffer[128];
+        if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+          num_events = std::atoll(buffer);
+        }
+        pclose(pipe);
+      }
+    }
 
     DFTRACER_LOG_INFO("Finishing all iterations", "");
-    printf("scale,ops,ts,avg_time,std_dev,distribution\n%d,%lu,%lu,%f,%f,%s\n",
-           comm_size, num_operations, transfer_size, avg_time, std_dev,
-           use_distribution ? "yes" : "no");
+    printf(
+        "scale,ops,ts,min,p25,median,p75,max,mean,std_dev,distribution,size_mb,"
+        "num_events\n%d,%lu,"
+        "%lu,%f,%f,%f,%f,%f,%f,%f,%s,%f,%ld\n",
+        comm_size, num_operations, transfer_size, min_time, p25_time,
+        median_time, p75_time, max_time, mean_within, std_dev_within,
+        use_distribution ? "yes" : "no", size_mb, num_events);
   }
   MPI_Barrier(MPI_COMM_WORLD);
   if (fs::exists(filename)) fs::remove(filename);

@@ -122,8 +122,8 @@ inline bool compare_any(const std::any &a, const std::any &b) {
 }
 
 struct AggregatedKey {
-  std::string category;    // Pointer to interned string
-  std::string event_name;  // Pointer to interned string
+  std::string category;
+  std::string event_name;
   TimeResolution time_interval;
   ThreadID thread_id;
   Metadata *additional_keys;
@@ -215,7 +215,7 @@ struct hash<dftracer::AggregatedKey> {
       return key._cached_hash;
     }
 
-    // Fast pointer hashing for interned strings
+    // Hash string members
     std::size_t h1 = std::hash<std::string>()(key.category);
     std::size_t h2 = std::hash<std::string>()(key.event_name);
     std::size_t h3 = std::hash<TimeResolution>()(key.time_interval);
