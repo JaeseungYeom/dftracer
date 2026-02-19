@@ -111,13 +111,18 @@ class DFTLogger {
 #endif
     }
     this->buffer_manager =
-        dftracer::Singleton<dftracer::BufferManager>::get_new_instance();
+        dftracer::Singleton<dftracer::BufferManager>::get_instance();
     this->is_init = true;
   }
   ~DFTLogger() {
     for (auto &hash : computed_hash) {
       if (hash.second) free(hash.second);
     }
+  }
+
+  void reinitialize() {
+    DFTRACER_LOG_DEBUG("DFTLogger.reinitialize", "");
+    index.store(0);
   }
 
   inline HashType get_hash(char *name) {
@@ -264,7 +269,7 @@ class DFTLogger {
 
   inline TimeResolution get_time() {
     DFTRACER_LOG_DEBUG("DFTLogger.get_time", "");
-    struct timeval tv {};
+    struct timeval tv{};
     gettimeofday(&tv, NULL);
     TimeResolution t = 1000000 * tv.tv_sec + tv.tv_usec;
     return t;
