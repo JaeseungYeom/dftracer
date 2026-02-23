@@ -1,3 +1,4 @@
+#include <dftracer/core/common/constants.h>
 #include <dftracer/core/common/datastructure.h>
 #include <dftracer/core/common/logging.h>
 #include <dftracer/core/common/singleton.h>
