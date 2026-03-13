@@ -376,7 +376,7 @@ if(ENABLE_DLIO_BENCHMARK_TESTS)
     add_subdirectory(dlio_benchmark)
 endif()
 
-if(ENABLE_PAPER_TESTS)
+if(DFTRACER_ENABLE_PAPER_TESTS)
     add_subdirectory(paper)
 endif()
 
