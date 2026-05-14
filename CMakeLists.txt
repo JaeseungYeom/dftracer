@@ -65,7 +65,7 @@ if(CMAKE_INSTALL_LIBDIR)
                 ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR})
         set(DFTRACER_INSTALL_SYSCONFDIR
                 ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_SYSCONFDIR}/modulefiles)
-        set(DFTRACER_INSTALL_BINFDIR
+        set(DFTRACER_INSTALL_BIN_DIR
                 ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR})
 else()
         set(DFTRACER_LIBDIR "lib")
@@ -73,7 +73,7 @@ else()
         set(DFTRACER_INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
         set(DFTRACER_INSTALL_DOCDIR "${CMAKE_INSTALL_PREFIX}/doc")
         set(DFTRACER_INSTALL_SYSCONFDIR "${CMAKE_INSTALL_PREFIX}/etc/modulefiles")
-        set(DFTRACER_INSTALL_BINARYDIR "${CMAKE_INSTALL_PREFIX}/bin")
+        set(DFTRACER_INSTALL_BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin")
         message(STATUS "DFTRACER_LIBDIR set to ${DFTRACER_LIBDIR}")
 endif()
 
@@ -81,24 +81,24 @@ endif()
 # Internal Paths for cmake libraries and Setup install and output Directories
 # ------------------------------------------------------------------------------
 # This sets where to look for dependent libraries
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX})
+#set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_INSTALL_PREFIX})
 
 # This sets where to look for dependent library's cmake files
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake)
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/share/cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/share/cmake)
 
 # ------------------------------------------------------------------------------
 if(NOT DFTRACER_EXTERNALLY_CONFIGURED)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
-        set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/include CACHE PATH "Store the headers.")
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
+        set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Store the headers.")
         set(EXECUTABLE_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
 endif()
 
-include_directories(${CMAKE_BINARY_DIR}/include)
-link_directories(${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -243,41 +243,60 @@ else()
         set(DEPENDENCY_LIB ${CMAKE_EXE_LINKER_FLAGS} $ENV{LDFLAGS} -lpthread)
         set(DEPENDENCY_LIBRARY_DIRS "")
 
-        find_package(cpp-logger 1.0.0 REQUIRED)
-
-        if(${cpp-logger_FOUND})
-                include_directories(${CPP_LOGGER_INCLUDE_DIRS})
-                set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${CPP_LOGGER_LIBRARIES})
-                set(CPP_LOGGER_LIBRARY_DIR ${cpp-logger_DIR}/../../)
-
-                # Get absolute path for CPP_LOGGER_LIBRARY_DIR
-                get_filename_component(CPP_LOGGER_LIBRARY_DIR "${CPP_LOGGER_LIBRARY_DIR}" ABSOLUTE)
-
-                if(DEFINED CPP_LOGGER_LIBRARY_DIR)
-                        list(APPEND DEPENDENCY_LIBRARY_DIRS ${CPP_LOGGER_LIBRARY_DIR})
-                endif()
-
-                message(STATUS "[CPP_LOGGER] found cpp-logger at ${CPP_LOGGER_INCLUDE_DIRS}")
-        else()
-                message(FATAL_ERROR "-- [CPP_LOGGER] is needed for ${PROJECT_NAME} build")
-        endif()
-
-        find_package(brahma 3.0.0 REQUIRED)
+        find_package(Brahma 3.0.0 REQUIRED)
 
         if(${brahma_FOUND})
                 message(STATUS "[BRAHMA] found brahma at ${BRAHMA_INCLUDE_DIRS}")
                 include_directories(${BRAHMA_INCLUDE_DIRS})
                 set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${BRAHMA_LIBRARIES})
-                set(BRAHMA_LIBRARY_DIR ${brahma_DIR}/../../)
+                #set(BRAHMA_LIBRARY_DIR ${brahma_DIR}/../../)
 
                 # Get absolute path for BRAHMA_LIBRARY_DIR
-                get_filename_component(BRAHMA_LIBRARY_DIR "${BRAHMA_LIBRARY_DIR}" ABSOLUTE)
+                #get_filename_component(BRAHMA_LIBRARY_DIR "${BRAHMA_LIBRARY_DIR}" ABSOLUTE)
 
-                if(DEFINED BRAHMA_LIBRARY_DIR)
-                        list(APPEND DEPENDENCY_LIBRARY_DIRS ${BRAHMA_LIBRARY_DIR})
-                endif()
+                #if(DEFINED BRAHMA_LIBRARY_DIR)
+                #        list(APPEND DEPENDENCY_LIBRARY_DIRS ${BRAHMA_LIBRARY_DIR})
+                #endif()
         else()
                 message(FATAL_ERROR "-- [BRAHMA] is needed for ${PROJECT_NAME} build")
+        endif()
+        if (brahma_POPULATED)
+                get_target_property(_brahma_imported brahma IMPORTED)
+                if (NOT _brahma_imported)
+                        install(TARGETS brahma
+                                EXPORT ${DFTRACER_EXPORTED_TARGETS}
+                                LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
+                                ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
+                        )
+                endif()
+        endif()
+
+        if (NOT cpp-logger_FOUND)
+                find_package(CppLogger REQUIRED)
+                if (${cpp-logger_FOUND})
+                        include_directories(${CPP_LOGGER_INCLUDE_DIRS})
+                        set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${CPP_LOGGER_LIBRARIES})
+                        #set(CPP_LOGGER_LIBRARY_DIR ${cpp-logger_DIR}/../../)
+                        # Get absolute path for CPP_LOGGER_LIBRARY_DIR
+                        #get_filename_component(CPP_LOGGER_LIBRARY_DIR "${CPP_LOGGER_LIBRARY_DIR}" ABSOLUTE)
+
+                        #if(DEFINED CPP_LOGGER_LIBRARY_DIR)
+                        #        list(APPEND DEPENDENCY_LIBRARY_DIRS ${CPP_LOGGER_LIBRARY_DIR})
+                        #endif()
+                        message(STATUS "[CPP_LOGGER] found cpp-logger at ${CPP_LOGGER_INCLUDE_DIRS}")
+                else ()
+                        message(FATAL_ERROR "-- [CPP_LOGGER] is needed for ${PROJECT_NAME} build")
+                endif ()
+                if (cpp-logger_POPULATED)
+                        get_target_property(_cpp_logger_imported cpp-logger IMPORTED)
+                        if (NOT _cpp_logger_imported)
+                                install(TARGETS cpp-logger
+                                        EXPORT ${DFTRACER_EXPORTED_TARGETS}
+                                        LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
+                                        ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
+                                )
+                        endif()
+                endif()
         endif()
 
         find_package(yaml-cpp REQUIRED)
@@ -303,6 +322,7 @@ else()
         # Optional Dependencies
         # =============================================================================
         if (DFTRACER_BUILD_PYTHON_BINDINGS)
+                find_package(Python COMPONENTS Interpreter Development REQUIRED)
                 find_package(pybind11 REQUIRED)
                 #add_subdirectory(dependency/py11bind)
         endif()
@@ -542,51 +562,42 @@ else()
                 ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                 RUNTIME DESTINATION ${DFTRACER_INSTALL_BIN_DIR}
         )
-        install(TARGETS ${PROJECT_NAME}_preload
-                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-        install(TARGETS ${PROJECT_NAME}_preload_dbg
-                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
         install(
-                TARGETS
-                ${PROJECT_NAME}_preload
-                EXPORT
-                ${DFTRACER_EXPORTED_TARGETS}
+                TARGETS ${PROJECT_NAME}_preload
+                EXPORT ${DFTRACER_EXPORTED_TARGETS}
                 LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                 ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                 RUNTIME DESTINATION ${DFTRACER_INSTALL_BIN_DIR}
+                PUBLIC_HEADER DESTINATION ${DFTRACER_INSTALL_INCLUDE_DIR}
         )
         install(
-                TARGETS
-                ${PROJECT_NAME}_preload_dbg
-                EXPORT
-                ${DFTRACER_EXPORTED_TARGETS}
+                TARGETS ${PROJECT_NAME}_preload_dbg
+                EXPORT ${DFTRACER_EXPORTED_TARGETS}
                 LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                 ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                 RUNTIME DESTINATION ${DFTRACER_INSTALL_BIN_DIR}
+                PUBLIC_HEADER DESTINATION ${DFTRACER_INSTALL_INCLUDE_DIR}
         )
 
         if(DFTRACER_BUILD_PYTHON_BINDINGS)
                 install(TARGETS ${PROJECT_NAME}
-                        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                        LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-                file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/symlink.sh CONTENT "mkdir -p ${MAIN_PYTHON_SITE_PACKAGES}/dftracer;echo -- Installing: symlink ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}> from ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}>;ln -sf ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}> ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}>")
+                file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/symlink.sh CONTENT "mkdir -p ${MAIN_PYTHON_SITE_PACKAGES}/dftracer;echo -- Installing: symlink ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}> from ${DFTRACER_INSTALL_LIB_DIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}>;ln -sf ${DFTRACER_INSTALL_LIB_DIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}> ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}>")
                 install(CODE "execute_process(
                 COMMAND bash -c \"set -e
-                chmod +x ${CMAKE_BINARY_DIR}/symlink.sh
-                . ${CMAKE_BINARY_DIR}/symlink.sh
+                chmod +x ${CMAKE_CURRENT_BINARY_DIR}/symlink.sh
+                . ${CMAKE_CURRENT_BINARY_DIR}/symlink.sh
                 \")")
 
                 install(TARGETS ${PROJECT_NAME}_dbg
-                        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                        LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-                file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/symlink_dbg.sh CONTENT "mkdir -p ${MAIN_PYTHON_SITE_PACKAGES}/dftracer;echo -- Installing: symlink ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg> from ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg>;ln -sf ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg> ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg>")
+                file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/symlink_dbg.sh CONTENT "mkdir -p ${MAIN_PYTHON_SITE_PACKAGES}/dftracer;echo -- Installing: symlink ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg> from ${DFTRACER_INSTALL_LIB_DIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg>;ln -sf ${DFTRACER_INSTALL_LIB_DIR}/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg> ${MAIN_PYTHON_SITE_PACKAGES}/dftracer/$<TARGET_FILE_NAME:${PROJECT_NAME}_dbg>")
                 install(CODE "execute_process(
                 COMMAND bash -c \"set -e
-                chmod +x ${CMAKE_BINARY_DIR}/symlink_dbg.sh
-                . ${CMAKE_BINARY_DIR}/symlink_dbg.sh
+                chmod +x ${CMAKE_CURRENT_BINARY_DIR}/symlink_dbg.sh
+                . ${CMAKE_CURRENT_BINARY_DIR}/symlink_dbg.sh
                 \")")
         endif()
 
@@ -719,57 +730,57 @@ else()
                         if(GCOVR_EXECUTABLE)
                                 add_custom_target(coverage
                                         COMMAND ${CMAKE_COMMAND} -E echo "Generating C/C++ coverage reports..."
-                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage/html
+                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/coverage
+                                        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/coverage/html
 
                                         # Generate HTML report with details
                                         COMMAND ${GCOVR_EXECUTABLE}
-                                        -r ${CMAKE_SOURCE_DIR}
-                                        ${CMAKE_BINARY_DIR}
-                                        --html-details ${CMAKE_BINARY_DIR}/coverage/html/index.html
-                                        -e ${CMAKE_SOURCE_DIR}/test/
-                                        -e ${CMAKE_SOURCE_DIR}/examples/
-                                        -e ${CMAKE_SOURCE_DIR}/dependency/
-                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        -r ${CMAKE_CURRENT_SOURCE_DIR}
+                                        ${CMAKE_CURRENT_BINARY_DIR}
+                                        --html-details ${CMAKE_CURRENT_BINARY_DIR}/coverage/html/index.html
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/test/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/build/
                                         --exclude-unreachable-branches
                                         --exclude-throw-branches
 
                                         # Generate XML for CI
                                         COMMAND ${GCOVR_EXECUTABLE}
-                                        -r ${CMAKE_SOURCE_DIR}
-                                        ${CMAKE_BINARY_DIR}
-                                        --xml ${CMAKE_BINARY_DIR}/coverage/coverage.xml
-                                        -e ${CMAKE_SOURCE_DIR}/test/
-                                        -e ${CMAKE_SOURCE_DIR}/examples/
-                                        -e ${CMAKE_SOURCE_DIR}/dependency/
-                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        -r ${CMAKE_CURRENT_SOURCE_DIR}
+                                        ${CMAKE_CURRENT_BINARY_DIR}
+                                        --xml ${CMAKE_CURRENT_BINARY_DIR}/coverage/coverage.xml
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/test/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/build/
                                         --exclude-unreachable-branches
                                         --exclude-throw-branches
 
                                         # Generate Coveralls JSON for CI
                                         COMMAND ${GCOVR_EXECUTABLE}
-                                        -r ${CMAKE_SOURCE_DIR}
-                                        ${CMAKE_BINARY_DIR}
-                                        --coveralls ${CMAKE_BINARY_DIR}/coverage/coveralls.json
-                                        -e ${CMAKE_SOURCE_DIR}/test/
-                                        -e ${CMAKE_SOURCE_DIR}/examples/
-                                        -e ${CMAKE_SOURCE_DIR}/dependency/
-                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        -r ${CMAKE_CURRENT_SOURCE_DIR}
+                                        ${CMAKE_CURRENT_BINARY_DIR}
+                                        --coveralls ${CMAKE_CURRENT_BINARY_DIR}/coverage/coveralls.json
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/test/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/build/
                                         --exclude-unreachable-branches
                                         --exclude-throw-branches
 
                                         # Print summary
                                         COMMAND ${GCOVR_EXECUTABLE}
-                                        -r ${CMAKE_SOURCE_DIR}
-                                        ${CMAKE_BINARY_DIR}
-                                        -e ${CMAKE_SOURCE_DIR}/test/
-                                        -e ${CMAKE_SOURCE_DIR}/examples/
-                                        -e ${CMAKE_SOURCE_DIR}/dependency/
-                                        -e ${CMAKE_SOURCE_DIR}/build/
+                                        -r ${CMAKE_CURRENT_SOURCE_DIR}
+                                        ${CMAKE_CURRENT_BINARY_DIR}
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/test/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/examples/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/dependency/
+                                        -e ${CMAKE_CURRENT_SOURCE_DIR}/build/
                                         --exclude-unreachable-branches
                                         --exclude-throw-branches
-                                        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                                        COMMENT "Generating coverage reports in ${CMAKE_BINARY_DIR}/coverage/"
+                                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                                        COMMENT "Generating coverage reports in ${CMAKE_CURRENT_BINARY_DIR}/coverage/"
                                         VERBATIM
                                 )
 
@@ -807,7 +818,7 @@ else()
 
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/dftracer-utils.cmake"
                 DESTINATION "${DFTRACER_LIBDIR}/cmake/dftracer")
-        install(FILES "${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake"
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake"
                 DESTINATION "${DFTRACER_LIBDIR}/cmake/dftracer")
 
         # -----------------------------------------------------------------------------
@@ -819,10 +830,10 @@ else()
                 FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/dftracer-targets.cmake")
 
         # Write the configure file
-        configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_config.hpp.in"
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/dftracer_config.hpp.in"
                 "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/dftracer/core/dftracer_config.hpp" @ONLY)
 
-        configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_config_dbg.hpp.in"
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/dftracer_config_dbg.hpp.in"
                 "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/dftracer/core/dftracer_config_dbg.hpp" @ONLY)
 
         # ###############################################################
@@ -832,7 +843,7 @@ else()
 
         # Write the version file. This is independent of build/install tree.
         write_basic_package_version_file(
-                ${CMAKE_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake
+                ${CMAKE_CURRENT_BINARY_DIR}/${DFTRACER_LIBDIR}/cmake/${PROJECT_NAME}/dftracer-config-version.cmake
                 VERSION "${DFTRACER_LIBRARY_VERSION}"
                 COMPATIBILITY SameMajorVersion
         )
@@ -959,11 +970,11 @@ else()
         endif()
 
         configure_file(
-                "${CMAKE_SOURCE_DIR}/cmake/configure_files/dftracer_module.lua.in"
-                "${CMAKE_BINARY_DIR}/dftracer_module.lua.install"
+                "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/dftracer_module.lua.in"
+                "${CMAKE_CURRENT_BINARY_DIR}/dftracer_module.lua.install"
                 @ONLY)
 
-        install(FILES "${CMAKE_BINARY_DIR}/dftracer_module.lua.install"
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dftracer_module.lua.install"
                 RENAME "${DFTRACER_MODULEFILE_NAME}"
                 DESTINATION
                 "${DFTRACER_INSTALL_SYSCONFDIR}")

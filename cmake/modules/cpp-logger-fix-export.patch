@@ -1,0 +1,93 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -53,19 +53,18 @@
+ # Internal Paths for cmake libraries and Setup install and output Directories
+ #------------------------------------------------------------------------------
+ # This sets where to look for dependent libraries
+-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX})
+ # This sets where to look for dependent library's cmake files
+ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
+-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR}/cmake)
+-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/share/cmake)
++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR}/cmake)
++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/share/cmake)
+ 
+ #------------------------------------------------------------------------------
+ if (NOT CPP_LOGGER_EXTERNALLY_CONFIGURED)
+-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
+-    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/include CACHE PATH "Store the headers.")
++    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
++    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Store the headers.")
+     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
+-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
++    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
++    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
+ endif ()
+ 
+ #-----------------------------------------------------------------------------
+@@ -165,7 +165,7 @@
+ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)  # public header
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)  # private header
+-include_directories(${CMAKE_BINARY_DIR}/include)  # build header
++include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)  # build header
+ 
+ set(CPP_LOGGER_SRC      ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp-logger/logger.cpp
+                         ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp-logger/clogger.cpp)
+@@ -207,16 +207,16 @@
+ include(CMakePackageConfigHelpers)
+ configure_package_config_file(
+         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.build.in
+-        "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake 
+-        PATH_VARS CMAKE_BINARY_DIR
++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
+ )
+ 
+ configure_package_config_file(
+   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.install.in
+-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/install/${PROJECT_NAME}-config.cmake
+-        PATH_VARS CMAKE_BINARY_DIR
++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
+ )
+ 
+ # configure_file(
+@@ -225,7 +225,7 @@
+ # )
+ install(
+         FILES
+-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+         DESTINATION
+         ${CPP_LOGGER_LIBDIR}/cmake/${PROJECT_NAME}
+ )
+@@ -277,12 +277,6 @@
+         ${CPP_LOGGER_EXPORTED_TARGETS}.cmake
+         )
+ 
+-# Install export
+-install(EXPORT ${CPP_LOGGER_EXPORTED_TARGETS}
+-        NAMESPACE cpp-logger::
+-        FILE Cpp_loggerTargets.cmake
+-        DESTINATION "${CPP_LOGGER_LIBDIR}/cmake/cpp-logger")
+-
+ # Install license and readme
+ install(FILES
+         "${PROJECT_SOURCE_DIR}/NOTICE"
+@@ -373,10 +373,10 @@
+ 
+ configure_file(
+   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/cpp_logger_module.lua.in"
+-  "${CMAKE_BINARY_DIR}/cpp_logger_module.lua.install"
++  "${CMAKE_CURRENT_BINARY_DIR}/cpp_logger_module.lua.install"
+   @ONLY)
+ 
+-install(FILES "${CMAKE_BINARY_DIR}/cpp_logger_module.lua.install"
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cpp_logger_module.lua.install"
+   RENAME "${CPP_LOGGER_MODULEFILE_NAME}"
+   DESTINATION
+   "${CPP_LOGGER_INSTALL_SYSCONFDIR}")

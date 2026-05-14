@@ -1,0 +1,501 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d554f2b..01fb2f5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -16,7 +16,7 @@ set(BRAHMA_PACKAGE_STRING "${BRAHMA_PACKAGE_NAME} ${BRAHMA_PACKAGE_VERSION}")
+ set(BRAHMA_PACKAGE_TARNAME "${BRAHMA_PACKAGE}")
+ set(BRAHMA_LIBTOOL_VERSION "${BRAHMA_PACKAGE_VERSION}")
+ 
+-set(BRAHMA_VERSION "(1, 0, 2)")
++set(BRAHMA_VERSION "(1, 0, 3)")
+ 
+ project(brahma LANGUAGES C CXX)
+ 
+@@ -56,21 +56,20 @@ endif ()
+ # Internal Paths for cmake libraries and Setup install and output Directories
+ #------------------------------------------------------------------------------
+ # This sets where to look for dependent libraries
+-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX})
+ # This sets where to look for dependent library's cmake files
+ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
+-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/${BRAHMA_LIBDIR}/cmake)
+-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/share/cmake)
++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/${BRAHMA_LIBDIR}/cmake)
++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/share/cmake)
+ 
+ include(brahma-utils)
+ 
+ #------------------------------------------------------------------------------
+ if (NOT BRAHMA_EXTERNALLY_CONFIGURED)
+-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
+-    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/include CACHE PATH "Store the headers.")
++    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
++    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Store the headers.")
+     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${BRAHMA_LIBDIR} CACHE PATH "Single Directory for all Libraries")
+-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${BRAHMA_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
++    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BRAHMA_LIBDIR} CACHE PATH "Single Directory for all Libraries")
++    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BRAHMA_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
+ endif ()
+ 
+ #-----------------------------------------------------------------------------
+@@ -265,9 +264,9 @@ else()
+ # Source for BRAHMA
+ #-----------------------------------------------------------------------------
+ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+-include_directories(${CMAKE_SOURCE_DIR}/include)  # public header
+-include_directories(${CMAKE_SOURCE_DIR}/src)  # private header
+-include_directories(${CMAKE_BINARY_DIR}/include)  # build header
++include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)  # public header
++include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)  # private header
++include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)  # build header
+ 
+ set(BRAHMA_HDF5_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/brahma/interface/hdf5.cpp)
+ set(BRAHMA_HDF5_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include/brahma/interface/hdf5.h)
+@@ -319,7 +318,7 @@ brahma_install_headers("${BRAHMA_PUBLIC_HEADER};${BRAHMA_SRC_PRIVATE}" ${CMAKE_C
+ # =============================================================================
+ set(DEPENDENCY_LIB )
+ # find Gotcha
+-find_package(gotcha 2.1.2 REQUIRED)
++find_package(Gotcha REQUIRED)
+ if (${gotcha_FOUND})
+     message(STATUS "[${PROJECT_NAME}] found gotcha at ${gotcha_INCLUDE_DIRS}")
+     include_directories(${gotcha_INCLUDE_DIRS})
+@@ -476,13 +475,8 @@ if(BRAHMA_BUILD_WITH_MPI)
+ endif()
+ 
+ if (BRAHMA_LOGGER STREQUAL "CPP_LOGGER")
+-    find_package(cpp-logger 1.0.0 REQUIRED
+-                 HINTS ${CPP_LOGGER_DIR} ${cpp-logger_DIR}
+-                       ${CPP_LOGGER_PATH} ${cpp-logger_PATH}
+-                       $ENV{CPP_LOGGER_DIR} $ENV{cpp-logger_DIR}
+-                       $ENV{CPP_LOGGER_PATH} $ENV{cpp-logger_PATH})
++    find_package(CppLogger REQUIRED)
+     if (${cpp-logger_FOUND})
+-        message(STATUS "[${PROJECT_NAME}] found cpp-logger at ${CPP_LOGGER_INCLUDE_DIRS}")
+         include_directories(SYSTEM ${CPP_LOGGER_INCLUDE_DIRS})
+         set(DEPENDENCY_LIB ${DEPENDENCY_LIB} ${CPP_LOGGER_LIBRARIES})
+     else ()
+@@ -499,6 +493,29 @@ install(
+         ARCHIVE DESTINATION ${BRAHMA_INSTALL_LIB_DIR}
+         RUNTIME DESTINATION ${BRAHMA_INSTALL_BIN_DIR}
+ )
++
++if (gotcha_POPULATED)
++    get_target_property(_gotcha_imported gotcha IMPORTED)
++    if (NOT _gotcha_imported)
++        install(TARGETS gotcha
++                EXPORT ${BRAHMA_EXPORTED_TARGETS}
++                LIBRARY DESTINATION ${BRAHMA_INSTALL_LIB_DIR}
++                ARCHIVE DESTINATION ${BRAHMA_INSTALL_LIB_DIR}
++        )
++    endif()
++endif()
++
++if (cpp-logger_POPULATED)
++    get_target_property(_cpp_logger_imported cpp-logger IMPORTED)
++    if (NOT _cpp_logger_imported)
++        install(TARGETS cpp-logger
++                EXPORT ${BRAHMA_EXPORTED_TARGETS}
++                LIBRARY DESTINATION ${BRAHMA_INSTALL_LIB_DIR}
++                ARCHIVE DESTINATION ${BRAHMA_INSTALL_LIB_DIR}
++        )
++    endif()
++endif()
++
+ #-----------------------------------------------------------------------------
+ # Testing
+ #-----------------------------------------------------------------------------
+@@ -517,16 +534,16 @@ endif()
+ include(CMakePackageConfigHelpers)
+ configure_package_config_file(
+         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.build.in
+-        "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake 
+-        PATH_VARS CMAKE_BINARY_DIR
++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
+ )
+ 
+ configure_package_config_file(
+   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.install.in
+-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/install/${PROJECT_NAME}-config.cmake
+-        PATH_VARS CMAKE_BINARY_DIR
++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
+ )
+ 
+ # configure_file(
+@@ -535,7 +552,7 @@ configure_package_config_file(
+ # )
+ install(
+         FILES
+-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+         DESTINATION
+         ${BRAHMA_LIBDIR}/cmake/${PROJECT_NAME}
+ )
+@@ -558,7 +575,7 @@ export(EXPORT ${BRAHMA_EXPORTED_TARGETS}
+         FILE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}Targets.cmake")
+ 
+ # Write the configure file
+-configure_file("${CMAKE_SOURCE_DIR}/cmake/configure_files/brahma_config.hpp.in"
++configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/brahma_config.hpp.in"
+                "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/brahma/brahma_config.hpp" @ONLY)
+ 
+ 
+@@ -579,14 +596,6 @@ install(FILES
+         DESTINATION
+         ${BRAHMA_INSTALL_INCLUDE_DIR}/brahma)
+ 
+-install(EXPORT
+-        ${BRAHMA_EXPORTED_TARGETS}
+-        DESTINATION
+-        ${BRAHMA_LIBDIR}/cmake/${PROJECT_NAME}
+-        FILE
+-        ${BRAHMA_EXPORTED_TARGETS}.cmake
+-        )
+-
+ # Install export
+ install(EXPORT ${BRAHMA_EXPORTED_TARGETS}
+         NAMESPACE brahma::
+@@ -706,11 +715,11 @@ if (NOT (BRAHMA_MODULEFILE_NAME MATCHES ".+\.lua"))
+ endif ()
+ 
+ configure_file(
+-  "${CMAKE_SOURCE_DIR}/cmake/configure_files/brahma_module.lua.in"
+-  "${CMAKE_BINARY_DIR}/brahma_module.lua.install"
++  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/brahma_module.lua.in"
++  "${CMAKE_CURRENT_BINARY_DIR}/brahma_module.lua.install"
+   @ONLY)
+ 
+-install(FILES "${CMAKE_BINARY_DIR}/brahma_module.lua.install"
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/brahma_module.lua.install"
+   RENAME "${BRAHMA_MODULEFILE_NAME}"
+   DESTINATION
+   "${BRAHMA_INSTALL_SYSCONFDIR}")
+diff --git a/README.md b/README.md
+index bf3ea2b..d8d387e 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# Brahma v1.0.2
++# Brahma v1.0.3
+ 
+ A C++ style interception library for application calls.
+ This library uses [GOTCHA](https://github.com/LLNL/GOTCHA) to intercept POSIX, STDIO, MPI-IO, and HDF5 calls.
+@@ -6,8 +6,8 @@ The interception of MPI-IO and HDF5 calls are optional and the library can be co
+ 
+ ## Dependencies
+ 
+-1. GOTCHA v1.0.7
+-2. CPP Logger v0.0.4
++1. GOTCHA v1.0.8
++2. CPP Logger v0.0.6
+ 
+ ## Build Brahma with cmake
+ 
+@@ -45,7 +45,7 @@ cmake --build $PWD/build --target all -j 50
+ ## Including brahma in your CMake Project.
+ 
+ ```cmake
+-find_package(brahma 2.0.0 REQUIRED)
++find_package(brahma 1.0.3 REQUIRED)
+ ```
+ 
+ Exported variables for this package are `brahma_FOUND`, `BRAHMA_INCLUDE_DIRS`, and `BRAHMA_LIBRARIES`.
+diff --git a/cmake/modules/FindCppLogger.cmake b/cmake/modules/FindCppLogger.cmake
+new file mode 100644
+index 0000000..45cd882
+--- /dev/null
++++ b/cmake/modules/FindCppLogger.cmake
+@@ -0,0 +1,86 @@
++#.rst:
++# FindCppLogger
++# -----------
++#
++# Find cpp-logger headers and libraries.
++#
++# ::
++#
++#   cpp-logger_FOUND          - True if cpp-logger found.
++#   cpp-logger_INCLUDE_DIRS   - Where to find cpp-logger.h.
++#   cpp-logger_LIBRARIES      - List of libraries when using cpp-logger.
++
++#cmake_minimum_required(VERSION 3.10.2) # based on the requirement of cpp-logger
++
++foreach (_cpp-logger_hint "$ENV{cpp_logger_DIR}" "$ENV{CPP_LOGGER_DIR}" "$ENV{Cpp_logger}")
++  if (_cpp-logger_hint)
++    foreach (_suffix
++             "lib/cmake/cpp-logger"   "lib/cmake/CPP-LOGGER" "lib/cmake/Cpp_logger"
++             "lib64/cmake/cpp-logger" "lib64/cmake/CPP-LOGGER" "lib64/cmake/Cpp_logger"
++             "lib"                    "lib64"
++    )
++        list(APPEND CMAKE_PREFIX_PATH "${_cpp-logger_hint}/${_suffix}")
++    endforeach ()
++    # Also add the hint root itself
++    list(APPEND CMAKE_PREFIX_PATH "${_cpp-logger_hint}")
++  endif ()
++endforeach ()
++
++
++find_package(cpp-logger 
++             NAMES cpp-logger CPP-LOGGER Cpp_logger
++             QUIET
++)
++
++if (NOT cpp-logger_FOUND AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.14")
++  message(STATUS "cpp-logger not found, fetching ...") 
++  include(FetchContent)
++  FetchContent_Declare(
++    cpp-logger
++    GIT_REPOSITORY https://github.com/hariharan-devarajan/cpp-logger.git
++    GIT_TAG        v0.0.6
++    PATCH_COMMAND  ${CMAKE_COMMAND} -E echo "Applying cpp-logger patch..."
++              COMMAND patch -p1 --forward --input=${CMAKE_SOURCE_DIR}/cmake/modules/cpp-logger-fix-export.patch
++    # cpp-logger CMakeLists.txt has a bug that exports target twice and 
++    # misuses CMAKE_BINARY_DIR where it should be CMAKE_CURRENT_BINARY_DIR.
++  )
++
++  set(CPP_LOGGER_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
++  set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
++  FetchContent_MakeAvailable(cpp-logger)
++  set(CMAKE_WARN_DEPRECATED ON CACHE BOOL "" FORCE)
++
++  target_compile_options(cpp-logger PRIVATE -std=gnu11 -w)
++endif ()
++
++if (TARGET cpp-logger::cpp-logger)
++  get_target_property(cpp-logger_INCLUDE_DIRS cpp-logger::cpp-logger INTERFACE_INCLUDE_DIRECTORIES)
++  if (NOT cpp-logger_INCLUDE_DIRS)
++    set(cpp-logger_INCLUDE_DIRS ${CPP_LOGGER_INCLUDE_DIRS})
++  endif ()
++  set(cpp-logger_LIBRARIES cpp-logger::cpp-logger)
++  set(cpp-logger_FOUND TRUE)
++elseif (TARGET cpp-logger)
++  get_target_property(cpp-logger_INCLUDE_DIRS cpp-logger INTERFACE_INCLUDE_DIRECTORIES)
++  if (NOT cpp-logger_INCLUDE_DIRS)
++    set(cpp-logger_INCLUDE_DIRS ${CPP_LOGGER_INCLUDE_DIRS})
++  endif ()
++  set(cpp-logger_LIBRARIES cpp-logger)
++  set(cpp-logger_FOUND TRUE)
++elseif (cpp-logger_LIBRARIES)
++  add_library(cpp-logger::cpp-logger UNKNOWN IMPORTED)
++  set_target_properties(cpp-logger::cpp-logger PROPERTIES
++    IMPORTED_LOCATION             "${cpp-logger_LIBRARIES}"
++    INTERFACE_INCLUDE_DIRECTORIES "${cpp-logger_INCLUDE_DIRS}"
++  )
++  set(cpp-logger_LIBRARIES cpp-logger::cpp-logger)
++  set(cpp-logger_FOUND TRUE)
++else ()
++  message(FATAL_ERROR "cpp-logger: could not find or create target cpp-logger::cpp-logger")
++endif ()
++
++message(STATUS "cpp-logger_LIBRARIES: ${cpp-logger_LIBRARIES}")
++message(STATUS "cpp-logger_INCLUDE_DIRS: ${cpp-logger_INCLUDE_DIRS}")
++set(CPP_LOGGER_INCLUDE_DIRS ${cpp-logger_INCLUDE_DIRS})
++set(CPP_LOGGER_LIBRARIES ${cpp-logger_LIBRARIES})
++mark_as_advanced(cpp-logger_INCLUDE_DIRS CPP_LOGGER_INCLUDE_DIR cpp-logger_LIBRARIES CPP_LOGGER_LIBRARIES)
+diff --git a/cmake/modules/FindGotcha.cmake b/cmake/modules/FindGotcha.cmake
+new file mode 100644
+index 0000000..3134bdb
+--- /dev/null
++++ b/cmake/modules/FindGotcha.cmake
+@@ -0,0 +1,97 @@
++#.rst:
++# FindGotcha
++# -----------
++#
++# Find gotcha headers and libraries.
++#
++# ::
++#
++#   gotcha_FOUND          - True if gotcha found.
++#   gotcha_INCLUDE_DIRS   - Where to find gotcha.h.
++#   gotcha_LIBRARIES      - List of libraries when using gotcha.
++
++#cmake_minimum_required(VERSION 3.0)
++
++foreach (_gotcha_hint "$ENV{gotcha_DIR}" "$ENV{GOTCHA_DIR}")
++  if (_gotcha_hint)
++    foreach (_suffix
++             "lib/cmake/gotcha"   "lib/cmake/GOTCHA"
++             "lib64/cmake/gotcha" "lib64/cmake/GOTCHA"
++             "lib"                "lib64"
++    )
++        list(APPEND CMAKE_PREFIX_PATH "${_gotcha_hint}/${_suffix}")
++    endforeach ()
++    # Also add the hint root itself
++    list(APPEND CMAKE_PREFIX_PATH "${_gotcha_hint}")
++  endif ()
++endforeach ()
++
++set(gotcha_FOUND FALSE)
++
++if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.14")
++  message(STATUS "Gotcha: fetching if not found") 
++  include(FetchContent)
++  FetchContent_Declare(
++    gotcha
++    GIT_REPOSITORY https://github.com/llnl/GOTCHA.git
++    GIT_TAG        1.0.8
++    PATCH_COMMAND  sed -i "s/CMAKE_SOURCE_DIR/CMAKE_CURRENT_SOURCE_DIR/g" CMakeLists.txt &&
++                   sed -i "s|PATH_VARS gotcha_INSTALL_INCLUDE_DIR PATH_VARS gotcha_INSTALL_LIBRARY_DIR|PATH_VARS gotcha_INSTALL_INCLUDE_DIR gotcha_INSTALL_LIBRARY_DIR|g" CMakeLists.txt &&
++                   sed -i "s|add_subdirectory(example)||g" src/CMakeLists.txt
++    FIND_PACKAGE_ARGS NAMES gotcha GOTCHA
++  )
++  set(GOTCHA_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
++  set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
++  FetchContent_MakeAvailable(gotcha)
++  set(CMAKE_WARN_DEPRECATED ON CACHE BOOL "" FORCE)
++
++  # Add the generated include directory so gotcha_config.h can be found
++  if (TARGET gotcha)
++    get_target_property(_gotcha_imported gotcha IMPORTED)
++    if (NOT _gotcha_imported)
++      set_target_properties(gotcha PROPERTIES C_EXTENSIONS ON)
++      target_compile_options(gotcha PRIVATE -std=gnu11 -w)
++      target_include_directories(gotcha PUBLIC
++        $<BUILD_INTERFACE:${gotcha_BINARY_DIR}/include>
++      )
++    else ()
++      message(STATUS "Gotcha imported")
++    endif ()
++  endif ()
++else ()
++  message(STATUS "Gotcha: finding only (CMake < 3.14)")
++  find_package(gotcha 
++               NAMES gotcha GOTCHA
++               REQUIRED
++  )
++endif ()
++
++if (TARGET gotcha::gotcha)
++  get_target_property(gotcha_INCLUDE_DIRS gotcha::gotcha INTERFACE_INCLUDE_DIRECTORIES)
++  if (NOT gotcha_INCLUDE_DIRS)
++    set(gotcha_INCLUDE_DIRS "")
++  endif ()
++  set(gotcha_LIBRARIES gotcha::gotcha)
++  set(gotcha_FOUND TRUE)
++elseif (TARGET gotcha)
++  get_target_property(gotcha_INCLUDE_DIRS gotcha INTERFACE_INCLUDE_DIRECTORIES)
++  if (NOT gotcha_INCLUDE_DIRS)
++    set(gotcha_INCLUDE_DIRS "")
++  endif ()
++  set(gotcha_LIBRARIES gotcha)
++  set(gotcha_FOUND TRUE)
++elseif (gotcha_LIBRARIES)
++  add_library(gotcha::gotcha UNKNOWN IMPORTED)
++  set_target_properties(gotcha::gotcha PROPERTIES
++    IMPORTED_LOCATION             "${gotcha_LIBRARIES}"
++    INTERFACE_INCLUDE_DIRECTORIES "${gotcha_INCLUDE_DIRS}"
++  )
++  set(gotcha_LIBRARIES gotcha::gotcha)
++  set(gotcha_FOUND TRUE)
++else ()
++  message(FATAL_ERROR "Gotcha: could not find or create target gotcha::gotcha")
++endif ()
++
++message(STATUS "gotcha_INCLUDE_DIRS: ${gotcha_INCLUDE_DIRS}")
++message(STATUS "gotcha_LIBRARIES: ${gotcha_LIBRARIES}")
++mark_as_advanced(gotcha_INCLUDE_DIRS gotcha_INCLUDE_DIR gotcha_LIBRARIES)
+diff --git a/cmake/modules/cpp-logger-fix-export.patch b/cmake/modules/cpp-logger-fix-export.patch
+new file mode 100644
+index 0000000..5faae76
+--- /dev/null
++++ b/cmake/modules/cpp-logger-fix-export.patch
+@@ -0,0 +1,93 @@
++--- a/CMakeLists.txt
+++++ b/CMakeLists.txt
++@@ -53,19 +53,18 @@
++ # Internal Paths for cmake libraries and Setup install and output Directories
++ #------------------------------------------------------------------------------
++ # This sets where to look for dependent libraries
++-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX})
++ # This sets where to look for dependent library's cmake files
++ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
++-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR}/cmake)
++-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR}/share/cmake)
+++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR}/cmake)
+++list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR}/share/cmake)
++ 
++ #------------------------------------------------------------------------------
++ if (NOT CPP_LOGGER_EXTERNALLY_CONFIGURED)
++-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
++-    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/include CACHE PATH "Store the headers.")
+++    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables.")
+++    set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Store the headers.")
++     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
++-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
++-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
+++    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all Libraries")
+++    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CPP_LOGGER_LIBDIR} CACHE PATH "Single Directory for all static libraries.")
++ endif ()
++ 
++ #-----------------------------------------------------------------------------
++@@ -165,7 +165,7 @@
++ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
++ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)  # public header
++ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)  # private header
++-include_directories(${CMAKE_BINARY_DIR}/include)  # build header
+++include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)  # build header
++ 
++ set(CPP_LOGGER_SRC      ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp-logger/logger.cpp
++                         ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp-logger/clogger.cpp)
++@@ -207,16 +207,16 @@
++ include(CMakePackageConfigHelpers)
++ configure_package_config_file(
++         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.build.in
++-        "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+++        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
++         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_NAME}-config.cmake 
++-        PATH_VARS CMAKE_BINARY_DIR
+++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
++ )
++ 
++ configure_package_config_file(
++   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/${PROJECT_NAME}-config.cmake.install.in
++-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++         INSTALL_DESTINATION  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/install/${PROJECT_NAME}-config.cmake
++-        PATH_VARS CMAKE_BINARY_DIR
+++        PATH_VARS CMAKE_CURRENT_BINARY_DIR
++ )
++ 
++ # configure_file(
++@@ -225,7 +225,7 @@
++ # )
++ install(
++         FILES
++-        "${CMAKE_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
+++        "${CMAKE_CURRENT_BINARY_DIR}/install/${PROJECT_NAME}-config.cmake"
++         DESTINATION
++         ${CPP_LOGGER_LIBDIR}/cmake/${PROJECT_NAME}
++ )
++@@ -277,12 +277,6 @@
++         ${CPP_LOGGER_EXPORTED_TARGETS}.cmake
++         )
++ 
++-# Install export
++-install(EXPORT ${CPP_LOGGER_EXPORTED_TARGETS}
++-        NAMESPACE cpp-logger::
++-        FILE Cpp_loggerTargets.cmake
++-        DESTINATION "${CPP_LOGGER_LIBDIR}/cmake/cpp-logger")
++-
++ # Install license and readme
++ install(FILES
++         "${PROJECT_SOURCE_DIR}/NOTICE"
++@@ -373,10 +373,10 @@
++ 
++ configure_file(
++   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_files/cpp_logger_module.lua.in"
++-  "${CMAKE_BINARY_DIR}/cpp_logger_module.lua.install"
+++  "${CMAKE_CURRENT_BINARY_DIR}/cpp_logger_module.lua.install"
++   @ONLY)
++ 
++-install(FILES "${CMAKE_BINARY_DIR}/cpp_logger_module.lua.install"
+++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cpp_logger_module.lua.install"
++   RENAME "${CPP_LOGGER_MODULEFILE_NAME}"
++   DESTINATION
++   "${CPP_LOGGER_INSTALL_SYSCONFDIR}")
