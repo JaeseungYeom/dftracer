@@ -267,6 +267,7 @@ else()
                                 EXPORT ${DFTRACER_EXPORTED_TARGETS}
                                 LIBRARY DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
                                 ARCHIVE DESTINATION ${DFTRACER_INSTALL_LIB_DIR}
+                                PUBLIC_HEADER DESTINATION ${DFTRACER_INSTALL_INCLUDE_DIR}
                         )
                 endif()
         endif()

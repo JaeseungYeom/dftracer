@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d554f2b..01fb2f5 100644
+index d554f2b..367442a 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -16,7 +16,7 @@ set(BRAHMA_PACKAGE_STRING "${BRAHMA_PACKAGE_NAME} ${BRAHMA_PACKAGE_VERSION}")
@@ -145,7 +145,7 @@ index d554f2b..01fb2f5 100644
                 "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/brahma/brahma_config.hpp" @ONLY)
  
  
-@@ -579,14 +596,6 @@ install(FILES
+@@ -579,19 +596,11 @@ install(FILES
          DESTINATION
          ${BRAHMA_INSTALL_INCLUDE_DIR}/brahma)
  
@@ -160,7 +160,27 @@ index d554f2b..01fb2f5 100644
  # Install export
  install(EXPORT ${BRAHMA_EXPORTED_TARGETS}
          NAMESPACE brahma::
-@@ -706,11 +715,11 @@ if (NOT (BRAHMA_MODULEFILE_NAME MATCHES ".+\.lua"))
+-        FILE BrahmaTargets.cmake
+-        DESTINATION "${BRAHMA_LIBDIR}/cmake/brahma")
++        DESTINATION ${BRAHMA_LIBDIR}/cmake/${PROJECT_NAME}
++        FILE ${BRAHMA_EXPORTED_TARGETS}.cmake)
+ 
+ # Install license and readme
+ install(FILES
+@@ -601,6 +610,12 @@ install(FILES
+         DESTINATION
+         ${BRAHMA_INSTALL_DOCDIR})
+ 
++install(FILES
++        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/FindGotcha.cmake
++        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/FindCppLogger.cmake
++        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/cpp-logger-fix-export.patch
++        DESTINATION ${BRAHMA_LIBDIR}/cmake/brahma/modules)
++
+ ###############################################################################
+ #                      Print out configuration summary
+ ###############################################################################
+@@ -706,11 +721,11 @@ if (NOT (BRAHMA_MODULEFILE_NAME MATCHES ".+\.lua"))
  endif ()
  
  configure_file(
@@ -205,12 +225,95 @@ index bf3ea2b..d8d387e 100644
  ```
  
  Exported variables for this package are `brahma_FOUND`, `BRAHMA_INCLUDE_DIRS`, and `BRAHMA_LIBRARIES`.
+diff --git a/cmake/configure_files/brahma-config.cmake.install.in b/cmake/configure_files/brahma-config.cmake.install.in
+index 7a016d5..30d3935 100644
+--- a/cmake/configure_files/brahma-config.cmake.install.in
++++ b/cmake/configure_files/brahma-config.cmake.install.in
+@@ -9,8 +9,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/modules")
+ list(APPEND CMAKE_MODULE_PATH "@EXTRA_CMAKE_MODULE_DIR@")
+ 
+ #include(GNUInstallDirs)
+-include(ExternalProject)
+-include(CMakePackageConfigHelpers)
++#include(ExternalProject)
++#include(CMakePackageConfigHelpers)
+ 
+ 
+ set(BRAHMA_VERSION ${PACKAGE_VERSION})
+@@ -53,16 +53,18 @@ endforeach (_DIR ${_TMP_LIBRARY_DIRS})
+ 
+ if (NOT TARGET brahma::brahma)
+   include(${CMAKE_CURRENT_LIST_DIR}/brahma-targets.cmake)
+-endif (NOT TARGET brahma::brahma)
++endif ()
+ 
+ 
+-find_package(gotcha 2.1.2 REQUIRED)
+-if (${gotcha_FOUND})
++find_package(Gotcha REQUIRED)
++if (gotcha_FOUND)
+     message(STATUS "[Brahma] found gotcha at ${gotcha_INCLUDE_DIRS}")
+-    include_directories(${gotcha_INCLUDE_DIRS})
+-    target_link_libraries(brahma INTERFACE ${gotcha_LIBRARIES})
++    set_property(TARGET brahma::brahma APPEND PROPERTY
++                 INTERFACE_INCLUDE_DIRECTORIES "${gotcha_INCLUDE_DIRS}")
++    set_property(TARGET brahma::brahma APPEND PROPERTY
++                 INTERFACE_LINK_LIBRARIES "${gotcha_LIBRARIES}")
+ else ()
+-    message(FATAL_ERROR "-- [Brahma] gotcha is needed for ${PROJECT_NAME} build")
++    message(FATAL_ERROR "-- [Brahma] gotcha is needed for brahma build")
+ endif ()
+ 
+ set(BRAHMA_INCLUDE_MPI @BRAHMA_BUILD_WITH_MPI@)
+@@ -70,24 +72,24 @@ if (BRAHMA_INCLUDE_MPI)
+   find_package(MPI COMPONENTS CXX REQUIRED)
+   if (MPI_FOUND)
+         message(STATUS "[Brahma] found mpi.h at ${MPI_CXX_INCLUDE_DIRS}")
+-        include_directories(${MPI_CXX_INCLUDE_DIRS})
+-        target_link_libraries(brahma INTERFACE ${MPI_CXX_LIBRARIES})
++        set_property(TARGET brahma::brahma APPEND PROPERTY
++                     INTERFACE_INCLUDE_DIRECTORIES "${MPI_CXX_INCLUDE_DIRS}")
++        set_property(TARGET brahma::brahma APPEND PROPERTY
++                     INTERFACE_LINK_LIBRARIES "${MPI_CXX_LIBRARIES}")
+     else ()
+-        message(FATAL_ERROR "-- [Brahma] mpi is needed for ${PROJECT_NAME} build")
++        message(FATAL_ERROR "-- [Brahma] mpi is needed for brahma build")
+     endif ()
+ endif()
+ 
+ set(BRAHMA_LOGGER @BRAHMA_LOGGER@)
+ if (BRAHMA_LOGGER STREQUAL "CPP_LOGGER")
+-    find_package(cpp-logger REQUIRED
+-                 HINTS ${CPP_LOGGER_DIR} ${cpp-logger_DIR}
+-                       ${CPP_LOGGER_PATH} ${cpp-logger_PATH}
+-                       $ENV{CPP_LOGGER_DIR} $ENV{cpp-logger_DIR}
+-                       $ENV{CPP_LOGGER_PATH} $ENV{cpp-logger_PATH})
+-    if (${cpp-logger_FOUND})
++    find_package(CppLogger REQUIRED)
++    if (cpp-logger_FOUND)
+         message(STATUS "[Brahma] found cpp-logger at ${CPP_LOGGER_INCLUDE_DIRS}")
+-        include_directories(SYSTEM ${CPP_LOGGER_INCLUDE_DIRS})
+-        target_link_libraries(brahma INTERFACE ${CPP_LOGGER_LIBRARIES})
++        set_property(TARGET brahma::brahma APPEND PROPERTY
++                     INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${CPP_LOGGER_INCLUDE_DIRS}")
++        set_property(TARGET brahma::brahma APPEND PROPERTY
++                     INTERFACE_LINK_LIBRARIES "${CPP_LOGGER_LIBRARIES}")
+     else ()
+         message(FATAL_ERROR "-- [Brahma] cpp-logger is not found but selected in cmake options for Brahma build")
+     endif ()
+@@ -95,4 +97,4 @@ endif()
+ 
+ check_required_components(brahma)
+ 
+-set(BRAHMA_LIBRARIES brahma)
+\ No newline at end of file
++set(BRAHMA_LIBRARIES brahma::brahma)
 diff --git a/cmake/modules/FindCppLogger.cmake b/cmake/modules/FindCppLogger.cmake
 new file mode 100644
-index 0000000..45cd882
+index 0000000..e0d4075
 --- /dev/null
 +++ b/cmake/modules/FindCppLogger.cmake
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,87 @@
 +#.rst:
 +# FindCppLogger
 +# -----------
@@ -225,7 +328,8 @@ index 0000000..45cd882
 +
 +#cmake_minimum_required(VERSION 3.10.2) # based on the requirement of cpp-logger
 +
-+foreach (_cpp-logger_hint "$ENV{cpp_logger_DIR}" "$ENV{CPP_LOGGER_DIR}" "$ENV{Cpp_logger}")
++foreach (_cpp-logger_hint "$ENV{cpp_logger_DIR}" "$ENV{CPP_LOGGER_DIR}" "$ENV{Cpp_logger}"
++                          "$ENV{cpp_logger_PATH}" "$ENV{CPP_LOGGER_PATH}")
 +  if (_cpp-logger_hint)
 +    foreach (_suffix
 +             "lib/cmake/cpp-logger"   "lib/cmake/CPP-LOGGER" "lib/cmake/Cpp_logger"
@@ -253,7 +357,7 @@ index 0000000..45cd882
 +    GIT_REPOSITORY https://github.com/hariharan-devarajan/cpp-logger.git
 +    GIT_TAG        v0.0.6
 +    PATCH_COMMAND  ${CMAKE_COMMAND} -E echo "Applying cpp-logger patch..."
-+              COMMAND patch -p1 --forward --input=${CMAKE_SOURCE_DIR}/cmake/modules/cpp-logger-fix-export.patch
++              COMMAND patch -p1 --forward --input=${CMAKE_CURRENT_LIST_DIR}/cpp-logger-fix-export.patch
 +    # cpp-logger CMakeLists.txt has a bug that exports target twice and 
 +    # misuses CMAKE_BINARY_DIR where it should be CMAKE_CURRENT_BINARY_DIR.
 +  )
@@ -299,10 +403,10 @@ index 0000000..45cd882
 +mark_as_advanced(cpp-logger_INCLUDE_DIRS CPP_LOGGER_INCLUDE_DIR cpp-logger_LIBRARIES CPP_LOGGER_LIBRARIES)
 diff --git a/cmake/modules/FindGotcha.cmake b/cmake/modules/FindGotcha.cmake
 new file mode 100644
-index 0000000..3134bdb
+index 0000000..37c932a
 --- /dev/null
 +++ b/cmake/modules/FindGotcha.cmake
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,98 @@
 +#.rst:
 +# FindGotcha
 +# -----------
@@ -317,7 +421,8 @@ index 0000000..3134bdb
 +
 +#cmake_minimum_required(VERSION 3.0)
 +
-+foreach (_gotcha_hint "$ENV{gotcha_DIR}" "$ENV{GOTCHA_DIR}")
++foreach (_gotcha_hint "$ENV{gotcha_DIR}" "$ENV{GOTCHA_DIR}"
++                      "$ENV{gotcha_PATH}" "$ENV{GOTCHA_PATH}")
 +  if (_gotcha_hint)
 +    foreach (_suffix
 +             "lib/cmake/gotcha"   "lib/cmake/GOTCHA"
